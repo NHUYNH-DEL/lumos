@@ -3,25 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LUMOS TOP - Management System</title>
-    <!-- Tailwind CSS -->
+    <title>LUMOS TOP - Quản lý Đua Top</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React & ReactDOM -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <!-- Babel for JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.min.js"></script>
-    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         body { font-family: 'Inter', sans-serif; }
-        .animate-in { animation: fadeIn 0.5s ease-out forwards; }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        .animate-in { animation: fadeIn 0.3s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body class="bg-[#080a0f] text-slate-300">
@@ -30,14 +22,8 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // Cấu hình icon để dùng với CDN
-        const Icon = ({ name, size = 20, className = "" }) => {
-            const iconRef = useRef(null);
-            useEffect(() => {
-                if (window.lucide) {
-                    window.lucide.createIcons();
-                }
-            }, [name]);
+        const Icon = ({ name, size = 18, className = "" }) => {
+            useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
             return <i data-lucide={name} style={{ width: size, height: size }} className={className}></i>;
         };
 
@@ -50,185 +36,172 @@
         ];
 
         const ALL_UNIQUE_CATEGORIES = Array.from(new Set(RACE_SCHEDULE.flatMap(r => r.categories))).sort();
-        
-        const getAdjustedStartDate = () => {
-            const now = new Date();
-            const d = new Date(now);
-            d.setHours(0, 0, 0, 0);
-            d.setDate(d.getDate() - 1); 
-            return d;
-        };
-
-        const START_DATE = getAdjustedStartDate();
+        const START_DATE = new Date("2024-05-19T00:00:00"); 
         const TOTAL_CYCLE_DAYS = RACE_SCHEDULE.reduce((a, b) => a + b.duration, 0);
 
         function App() {
+            // KHÔI PHỤC DỮ LIỆU CŨ: Kiểm tra cả 2 key cũ và mới
             const [players, setPlayers] = useState(() => {
-                const saved = localStorage.getItem('lumos_players');
-                return saved ? JSON.parse(saved) : [];
+                const oldData = localStorage.getItem('lumos_players');
+                const newData = localStorage.getItem('lumos_v2_players');
+                if (newData) return JSON.parse(newData);
+                if (oldData) return JSON.parse(oldData);
+                return [];
             });
-            const [view, setView] = useState('active-race'); 
+
+            const [history, setHistory] = useState([]);
+            const [view, setView] = useState('active-race');
             const [searchTerm, setSearchTerm] = useState('');
             const [activeTab, setActiveTab] = useState('All');
-            const [currentRaceInfo, setCurrentRaceInfo] = useState({ index: 0, remaining: 2, categories: [] });
-            const [lastAction, setLastAction] = useState(null);
-            
+            const [currentRaceInfo, setCurrentRaceInfo] = useState({ index: 0, remaining: 0, categories: [] });
+
             const [regName, setRegName] = useState('');
             const [regCategory, setRegCategory] = useState('');
             const [regTop, setRegTop] = useState('Top 1');
 
             useEffect(() => {
-                localStorage.setItem('lumos_players', JSON.stringify(players));
+                localStorage.setItem('lumos_v2_players', JSON.stringify(players));
             }, [players]);
 
             useEffect(() => {
-                updateRaceStatus();
-                const timer = setInterval(updateRaceStatus, 60000);
+                const update = () => {
+                    const now = new Date();
+                    const diffMs = now - START_DATE;
+                    const diffDaysFull = diffMs / (1000 * 60 * 60 * 24);
+                    const dayInCycle = diffDaysFull % TOTAL_CYCLE_DAYS;
+                    let acc = 0;
+                    for (let i = 0; i < RACE_SCHEDULE.length; i++) {
+                        const race = RACE_SCHEDULE[i];
+                        if (dayInCycle >= acc && dayInCycle < acc + race.duration) {
+                            setCurrentRaceInfo({ index: i, remaining: Math.ceil(race.duration - (dayInCycle - acc)), categories: race.categories });
+                            break;
+                        }
+                        acc += race.duration;
+                    }
+                };
+                update();
+                const timer = setInterval(update, 60000);
                 return () => clearInterval(timer);
             }, []);
 
-            const updateRaceStatus = () => {
-                const now = new Date();
-                const diffMs = now - START_DATE;
-                const diffDaysFull = diffMs / (1000 * 60 * 60 * 24);
-                const dayInCycle = diffDaysFull % TOTAL_CYCLE_DAYS;
-
-                let acc = 0;
-                for (let i = 0; i < RACE_SCHEDULE.length; i++) {
-                    const race = RACE_SCHEDULE[i];
-                    if (dayInCycle >= acc && dayInCycle < acc + race.duration) {
-                        setCurrentRaceInfo({
-                            index: i,
-                            remaining: Math.ceil(race.duration - (dayInCycle - acc)),
-                            categories: race.categories
-                        });
-                        break;
-                    }
-                    acc += race.duration;
+            const saveState = () => setHistory([JSON.stringify(players), ...history.slice(0, 9)]);
+            
+            const undo = () => {
+                if (history.length > 0) {
+                    setPlayers(JSON.parse(history[0]));
+                    setHistory(history.slice(1));
                 }
             };
 
-            const calculateEstimateDate = (category, playerIndexInQueue) => {
-                const occurrencesNeeded = playerIndexInQueue + 1;
-                let daysFromNow = 0;
-                let currentIdx = currentRaceInfo.index;
-                const now = new Date();
-                const diffMs = now - START_DATE;
-                const diffDaysFull = diffMs / (1000 * 60 * 60 * 24);
-                const dayInCycle = diffDaysFull % TOTAL_CYCLE_DAYS;
-                let acc = 0;
-                for(let i=0; i<currentIdx; i++) acc += RACE_SCHEDULE[i].duration;
-                let remainingInCurrent = RACE_SCHEDULE[currentIdx].duration - (dayInCycle - acc);
-
-                let foundOccurrences = 0;
-                let pointerIdx = currentIdx;
-                let safety = 0;
-                while (foundOccurrences < occurrencesNeeded && safety < 100) {
-                    if (RACE_SCHEDULE[pointerIdx].categories.includes(category)) {
-                        foundOccurrences++;
-                        if (foundOccurrences === occurrencesNeeded) break;
-                    }
-                    daysFromNow += (safety === 0) ? remainingInCurrent : RACE_SCHEDULE[pointerIdx].duration;
-                    pointerIdx = (pointerIdx + 1) % RACE_SCHEDULE.length;
-                    safety++;
-                }
-                const estDate = new Date();
-                estDate.setDate(estDate.getDate() + Math.floor(daysFromNow));
-                return estDate;
+            const updateStatus = (id, newStatus) => {
+                saveState();
+                setPlayers(players.map(p => p.id === id ? { 
+                    ...p, 
+                    status: newStatus, 
+                    finishDate: newStatus === 'Đã đạt' ? new Date().toLocaleDateString('vi-VN') : (p.finishDate || null)
+                } : p));
             };
 
             const handleRegister = (e) => {
                 e.preventDefault();
-                const isCurrentCategory = currentRaceInfo.categories.includes(regCategory);
-                const newEntry = {
-                    id: Date.now(),
-                    name: regName,
-                    category: regCategory,
-                    top: regTop,
-                    status: isCurrentCategory ? "Đang đua" : "Chờ lượt", 
-                    regDate: Date.now()
-                };
+                saveState();
+                const isCurrent = currentRaceInfo.categories.includes(regCategory);
+                const newEntry = { id: Date.now(), name: regName.toUpperCase(), category: regCategory, top: regTop, status: isCurrent ? "Đang đua" : "Chờ lượt", regDate: Date.now() };
                 setPlayers([...players, newEntry]);
                 setRegName('');
                 setView('queue');
             };
 
-            const updateStatus = (id, newStatus) => {
-                setPlayers(players.map(p => p.id === id ? { ...p, status: newStatus } : p));
+            const deletePlayer = (id) => {
+                const p = players.find(x => x.id === id);
+                if(confirm(`Xóa nhân vật ${p?.name}?`)) {
+                    saveState();
+                    setPlayers(players.filter(p => p.id !== id));
+                }
             };
 
             const activeRaceData = useMemo(() => {
-                return currentRaceInfo.categories.map(cat => {
-                    const activeInCat = players.filter(p => p.category === cat && p.status === 'Đang đua');
-                    return {
-                        category: cat,
-                        rows: ["Top 1", "Top 2", "Top 3"].map(t => ({
-                            top: t,
-                            player: activeInCat.find(p => p.top === t) || null
-                        }))
-                    };
-                });
+                return currentRaceInfo.categories.map(cat => ({
+                    category: cat,
+                    rows: ["Top 1", "Top 2", "Top 3"].map(t => ({
+                        top: t,
+                        player: players.find(p => p.category === cat && p.top === t && p.status === 'Đang đua') || null
+                    }))
+                }));
             }, [players, currentRaceInfo]);
 
             const groupedQueue = useMemo(() => {
-                const filtered = players.filter(p => {
-                    if (p.status === 'Đã đạt') return false;
-                    const matchSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
-                    const matchTab = activeTab === 'All' || p.category === activeTab;
-                    return matchSearch && matchTab;
-                });
+                const filtered = players.filter(p => p.status !== 'Đã đạt' && (activeTab === 'All' || p.category === activeTab) && p.name.includes(searchTerm.toUpperCase()));
                 const groups = {};
-                filtered.forEach(p => {
-                    if (!groups[p.category]) groups[p.category] = [];
-                    groups[p.category].push(p);
-                });
+                filtered.forEach(p => { if (!groups[p.category]) groups[p.category] = []; groups[p.category].push(p); });
                 return groups;
             }, [players, searchTerm, activeTab]);
 
+            const finishedPlayers = useMemo(() => players.filter(p => p.status === 'Đã đạt'), [players]);
+
             return (
-                <div className="min-h-screen pb-10">
-                    <header className="sticky top-0 z-40 bg-[#080a0f]/80 backdrop-blur-xl border-b border-white/5 px-4 py-3">
+                <div className="min-h-screen pb-24">
+                    <header className="sticky top-0 z-40 bg-[#080a0f]/90 backdrop-blur-md border-b border-white/5 px-4 py-3">
                         <div className="max-w-5xl mx-auto flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+                                <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
                                     <Icon name="zap" className="text-white" />
                                 </div>
                                 <h1 className="text-lg font-black italic text-white hidden sm:block">LUMOS TOP</h1>
                             </div>
-                            <nav className="flex items-center bg-slate-900/50 p-1 rounded-xl border border-white/5 text-[10px] font-bold">
-                                <button onClick={() => setView('active-race')} className={`px-4 py-2 rounded-lg transition-all ${view === 'active-race' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>BẢNG ĐUA</button>
-                                <button onClick={() => setView('queue')} className={`px-4 py-2 rounded-lg transition-all ${view === 'queue' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>HÀNG CHỜ</button>
-                                <button onClick={() => setView('register')} className={`px-4 py-2 rounded-lg transition-all ${view === 'register' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>GHI DANH</button>
-                            </nav>
+                            <div className="flex gap-2">
+                                {history.length > 0 && (
+                                    <button onClick={undo} className="p-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700" title="Hoàn tác">
+                                        <Icon name="undo-2" size={18} />
+                                    </button>
+                                )}
+                                <nav className="flex items-center bg-slate-900/50 p-1 rounded-xl border border-white/5 text-[10px] font-black">
+                                    <button onClick={() => setView('active-race')} className={`px-4 py-2 rounded-lg ${view === 'active-race' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500'}`}>BẢNG ĐUA</button>
+                                    <button onClick={() => setView('queue')} className={`px-4 py-2 rounded-lg ${view === 'queue' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500'}`}>HÀNG CHỜ</button>
+                                    <button onClick={() => setView('register')} className={`px-4 py-2 rounded-lg ${view === 'register' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500'}`}>GHI DANH</button>
+                                </nav>
+                            </div>
                         </div>
                     </header>
 
-                    <main className="max-w-5xl mx-auto p-4 space-y-6">
-                        <section className="bg-gradient-to-br from-indigo-900/40 to-slate-900 border border-indigo-500/20 rounded-[2rem] p-6 shadow-2xl flex flex-col md:flex-row justify-between items-center gap-6">
+                    <main className="max-w-5xl mx-auto p-4 space-y-8 mt-4">
+                        {/* Status Card */}
+                        <section className="bg-gradient-to-br from-indigo-900/40 via-slate-900 to-black border border-indigo-500/20 rounded-[2.5rem] p-8 shadow-2xl flex flex-col md:flex-row justify-between items-center gap-6 overflow-hidden">
                             <div>
-                                <span className="text-[10px] font-black text-yellow-500 uppercase tracking-widest block mb-2">Đang diễn ra</span>
-                                <h2 className="text-2xl sm:text-3xl font-black text-white italic uppercase">{RACE_SCHEDULE[currentRaceInfo.index]?.title}</h2>
+                                <span className="text-[10px] font-black text-yellow-500 uppercase tracking-widest block mb-2 px-3 py-1 bg-yellow-500/10 rounded-full w-fit">Sự kiện hiện tại</span>
+                                <h2 className="text-3xl sm:text-4xl font-black text-white italic uppercase tracking-tighter leading-tight">{RACE_SCHEDULE[currentRaceInfo.index]?.title}</h2>
                             </div>
-                            <div className="bg-black/40 px-8 py-4 rounded-2xl border border-yellow-500/30 text-center">
-                                <span className="text-[10px] font-black text-yellow-500/60 uppercase">KẾT THÚC SAU</span>
-                                <p className="text-4xl font-black text-yellow-400 italic">{currentRaceInfo.remaining} NGÀY</p>
+                            <div className="bg-black/40 px-10 py-5 rounded-3xl border border-yellow-500/20 text-center backdrop-blur-sm min-w-[200px]">
+                                <span className="text-[10px] font-bold text-yellow-500/60 uppercase">CÒN LẠI</span>
+                                <p className="text-5xl font-black text-yellow-400 italic tracking-tighter">{currentRaceInfo.remaining} <span className="text-xl">NGÀY</span></p>
                             </div>
                         </section>
 
                         {view === 'active-race' && (
-                            <div className="space-y-6 animate-in">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in">
                                 {activeRaceData.map(group => (
-                                    <div key={group.category} className="space-y-3">
-                                        <div className="flex items-center gap-3"><span className="text-[10px] font-black uppercase text-indigo-400 bg-indigo-500/10 px-3 py-1 rounded-full italic">Bảng: {group.category}</span></div>
-                                        <div className="grid grid-cols-1 gap-2">
+                                    <div key={group.category} className="bg-slate-900/30 rounded-3xl p-6 border border-white/5 space-y-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-2 h-6 bg-indigo-500 rounded-full"></div>
+                                            <h3 className="text-sm font-black uppercase text-indigo-400 italic">Bảng {group.category}</h3>
+                                        </div>
+                                        <div className="space-y-3">
                                             {group.rows.map(row => (
-                                                <div key={row.top} className={`flex items-center justify-between p-4 rounded-xl border ${row.player ? 'bg-slate-900 border-slate-800' : 'bg-slate-900/20 border-dashed border-slate-800 opacity-40'}`}>
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="text-center w-10"><Icon name="medal" className={row.top === 'Top 1' ? 'text-yellow-500' : 'text-slate-500'} /><span className="text-[8px] font-bold uppercase">{row.top}</span></div>
-                                                        <span className="text-sm font-black text-white uppercase italic">{row.player ? row.player.name : 'TRỐNG'}</span>
+                                                <div key={row.top} className={`flex items-center justify-between p-5 rounded-2xl border transition-all ${row.player ? 'bg-slate-900 border-indigo-500/30' : 'bg-slate-900/10 border-dashed border-white/5 opacity-40'}`}>
+                                                    <div className="flex items-center gap-5">
+                                                        <div className="flex flex-col items-center">
+                                                            <Icon name="trophy" className={row.top === 'Top 1' ? 'text-yellow-500' : 'text-slate-500'} />
+                                                            <span className="text-[9px] font-black text-slate-500 mt-1">{row.top}</span>
+                                                        </div>
+                                                        <span className="text-base font-black text-white uppercase italic">{row.player ? row.player.name : 'TRỐNG'}</span>
                                                     </div>
                                                     {row.player && (
-                                                        <button onClick={() => updateStatus(row.player.id, 'Đã đạt')} className="px-3 py-1.5 bg-emerald-600/20 text-emerald-500 rounded-lg text-[10px] font-black italic">XONG</button>
+                                                        <div className="flex gap-2">
+                                                            <button onClick={() => updateStatus(row.player.id, 'Chờ lượt')} className="p-2 bg-slate-800 text-slate-400 rounded-xl hover:text-white" title="Nhường lượt (Quay lại chờ)">
+                                                                <Icon name="arrow-down-to-dot" size={16} />
+                                                            </button>
+                                                            <button onClick={() => updateStatus(row.player.id, 'Đã đạt')} className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[10px] font-black italic">XONG</button>
+                                                        </div>
                                                     )}
                                                 </div>
                                             ))}
@@ -240,32 +213,41 @@
 
                         {view === 'queue' && (
                             <div className="space-y-6 animate-in">
-                                <div className="flex flex-col sm:flex-row gap-4">
-                                    <select onChange={(e) => setActiveTab(e.target.value)} className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs font-bold text-slate-400 outline-none">
+                                <div className="flex flex-col sm:flex-row gap-4 items-center bg-slate-900/50 p-4 rounded-2xl border border-white/5">
+                                    <Icon name="search" className="text-slate-500 ml-2" />
+                                    <input type="text" placeholder="TÌM TÊN..." className="flex-1 bg-transparent border-none text-xs font-bold text-white outline-none" onChange={(e) => setSearchTerm(e.target.value)} />
+                                    <select onChange={(e) => setActiveTab(e.target.value)} className="bg-slate-800 border-none rounded-xl px-4 py-2 text-[10px] font-black text-indigo-400 outline-none">
                                         <option value="All">TẤT CẢ BẢNG</option>
                                         {ALL_UNIQUE_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                                     </select>
-                                    <input type="text" placeholder="Tìm tên..." className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 text-xs outline-none focus:border-indigo-500" onChange={(e) => setSearchTerm(e.target.value)} />
                                 </div>
-                                <div className="space-y-8">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                     {Object.entries(groupedQueue).map(([category, items]) => (
-                                        <div key={category} className="space-y-2">
-                                            <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest border-l-2 border-indigo-500 pl-2">{category}</h3>
-                                            {items.map((p, idx) => (
-                                                <div key={p.id} className="flex items-center justify-between p-3 bg-slate-900/40 rounded-lg border border-slate-800">
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-[10px] font-black text-slate-600 w-4">{idx + 1}</span>
-                                                        <div>
-                                                            <p className="text-xs font-black text-white uppercase italic">{p.name} <span className="text-[9px] text-slate-500 not-italic">({p.top})</span></p>
-                                                            <p className="text-[8px] text-indigo-500 font-bold">Dự kiến: {calculateEstimateDate(category, idx).toLocaleDateString('vi-VN')}</p>
+                                        <div key={category} className="space-y-4">
+                                            <h3 className="text-[11px] font-black text-indigo-500 uppercase tracking-widest border-b border-white/5 pb-2">{category}</h3>
+                                            <div className="space-y-2">
+                                                {items.map((p, idx) => (
+                                                    <div key={p.id} className="flex items-center justify-between p-4 bg-slate-900/40 rounded-2xl border border-white/5 group">
+                                                        <div className="flex items-center gap-4">
+                                                            <span className="text-[10px] font-black text-slate-700 w-4 italic">#{idx + 1}</span>
+                                                            <div>
+                                                                <p className="text-xs font-black text-white uppercase italic">{p.name} <span className="text-[9px] text-indigo-400/60 not-italic ml-2">{p.top}</span></p>
+                                                                <span className={`text-[8px] font-bold uppercase ${p.status === 'Đang đua' ? 'text-indigo-400' : 'text-slate-600'}`}>
+                                                                    {p.status}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button onClick={() => updateStatus(p.id, p.status === 'Đang đua' ? 'Chờ lượt' : 'Đang đua')} className="p-2 bg-indigo-500/10 text-indigo-400 rounded-lg" title="Nhường / Đẩy lượt">
+                                                                <Icon name={p.status === 'Đang đua' ? "arrow-down-to-dot" : "arrow-up-to-line"} size={14}/>
+                                                            </button>
+                                                            <button onClick={() => deletePlayer(p.id)} className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all">
+                                                                <Icon name="trash-2" size={14}/>
+                                                            </button>
                                                         </div>
                                                     </div>
-                                                    <div className="flex gap-2">
-                                                        <button onClick={() => updateStatus(p.id, p.status === 'Đang đua' ? 'Chờ lượt' : 'Đang đua')} className="p-1.5 bg-indigo-500/10 text-indigo-400 rounded"><Icon name={p.status === 'Đang đua' ? 'rotate-ccw' : 'play'} size={14}/></button>
-                                                        <button onClick={() => updateStatus(p.id, 'Đã đạt')} className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded"><Icon name="check-circle-2" size={14}/></button>
-                                                    </div>
-                                                </div>
-                                            ))}
+                                                ))}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -273,26 +255,63 @@
                         )}
 
                         {view === 'register' && (
-                            <div className="max-w-md mx-auto bg-slate-900 p-6 rounded-2xl border border-slate-800 animate-in">
-                                <h2 className="text-xl font-black text-white text-center mb-6 italic">GHI DANH ĐUA TOP</h2>
-                                <form onSubmit={handleRegister} className="space-y-4">
-                                    <input required type="text" placeholder="TÊN NHÂN VẬT" value={regName} onChange={(e) => setRegName(e.target.value)} className="w-full bg-black border border-slate-800 rounded-lg p-3 text-xs font-bold text-white uppercase" />
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <select required value={regCategory} onChange={(e) => setRegCategory(e.target.value)} className="bg-black border border-slate-800 rounded-lg p-3 text-[10px] font-bold text-indigo-400">
-                                            <option value="">CHỌN BẢNG</option>
-                                            {ALL_UNIQUE_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                                        </select>
-                                        <select value={regTop} onChange={(e) => setRegTop(e.target.value)} className="bg-black border border-slate-800 rounded-lg p-3 text-[10px] font-bold text-yellow-500">
-                                            <option value="Top 1">TOP 1</option>
-                                            <option value="Top 2">TOP 2</option>
-                                            <option value="Top 3">TOP 3</option>
-                                        </select>
+                            <div className="max-w-md mx-auto bg-slate-900 p-8 rounded-[2rem] border border-white/5 shadow-2xl animate-in">
+                                <h2 className="text-2xl font-black text-white text-center mb-8 italic">GHI DANH TRANH HẠNG</h2>
+                                <form onSubmit={handleRegister} className="space-y-5">
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black text-slate-500 uppercase ml-2">Tên Nhân Vật</label>
+                                        <input required type="text" value={regName} onChange={(e) => setRegName(e.target.value)} className="w-full bg-black/50 border border-white/5 rounded-2xl p-4 text-sm font-black text-white uppercase outline-none focus:border-indigo-500/50" />
                                     </div>
-                                    <button type="submit" className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-black italic text-xs shadow-lg transition-all">XÁC NHẬN GHI DANH</button>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-black text-slate-500 uppercase ml-2">Bảng Đua</label>
+                                            <select required value={regCategory} onChange={(e) => setRegCategory(e.target.value)} className="w-full bg-black/50 border border-white/5 rounded-2xl p-4 text-xs font-black text-indigo-400">
+                                                <option value="">-- CHỌN --</option>
+                                                {ALL_UNIQUE_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-black text-slate-500 uppercase ml-2">Mục Tiêu</label>
+                                            <select value={regTop} onChange={(e) => setRegTop(e.target.value)} className="w-full bg-black/50 border border-white/5 rounded-2xl p-4 text-xs font-black text-yellow-500">
+                                                <option value="Top 1">TOP 1</option>
+                                                <option value="Top 2">TOP 2</option>
+                                                <option value="Top 3">TOP 3</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <button type="submit" className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black italic shadow-lg shadow-emerald-500/20">XÁC NHẬN GHI DANH</button>
                                 </form>
                             </div>
                         )}
+
+                        {/* BẢNG VÀNG - DỮ LIỆU ĐƯỢC GIỮ LẠI ĐÂY */}
+                        {finishedPlayers.length > 0 && (
+                            <section className="pt-10 border-t border-white/5">
+                                <div className="flex items-center gap-3 mb-6">
+                                    <Icon name="award" className="text-yellow-500" />
+                                    <h2 className="text-lg font-black text-white italic uppercase">BẢNG VÀNG DANH VỌNG</h2>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                    {finishedPlayers.map(p => (
+                                        <div key={p.id} className="bg-yellow-500/5 p-4 rounded-2xl border border-yellow-500/10 flex items-center justify-between group">
+                                            <div>
+                                                <p className="text-xs font-black text-yellow-500 italic uppercase">{p.name}</p>
+                                                <p className="text-[9px] text-slate-500 font-bold uppercase">{p.category} - {p.top}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-[10px] text-slate-400 font-bold">{p.finishDate}</p>
+                                                <button onClick={() => updateStatus(p.id, 'Chờ lượt')} className="mt-1 text-[8px] font-black text-indigo-400 opacity-0 group-hover:opacity-100 uppercase">Khôi phục</button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+                        )}
                     </main>
+
+                    <footer className="fixed bottom-0 left-0 right-0 bg-black/80 backdrop-blur-xl border-t border-white/5 p-3 text-center">
+                        <p className="text-[9px] font-black text-slate-600 tracking-widest uppercase italic">Thiết kế cho anh em Lumos</p>
+                    </footer>
                 </div>
             );
         }
