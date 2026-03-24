@@ -1,418 +1,328 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { initializeApp } from 'firebase/app';
-import { 
-  getFirestore, 
-  collection, 
-  doc, 
-  onSnapshot, 
-  deleteDoc, 
-  updateDoc, 
-  addDoc, 
-  query 
-} from 'firebase/firestore';
-import { 
-  getAuth, 
-  signInAnonymously, 
-  signInWithCustomToken, 
-  onAuthStateChanged 
-} from 'firebase/auth';
-import { 
-  Trophy, 
-  Zap, 
-  Trash2, 
-  Search, 
-  ArrowUpCircle, 
-  History, 
-  Calendar, 
-  UserPlus, 
-  Clock,
-  CheckCircle2,
-  XCircle
-} from 'lucide-react';
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lumos Race - Hệ Thống Quản Lý Đua Top</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0a0b14;
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+        .glass-card {
+            background: rgba(18, 20, 33, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .gradient-border {
+            position: relative;
+        }
+        .gradient-border::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899);
+            border-radius: 2px;
+        }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .custom-input {
+            background: #0f111a;
+            border: 2px solid #1e293b;
+            transition: all 0.3s ease;
+        }
+        .custom-input:focus {
+            border-color: #6366f1;
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
+            outline: none;
+        }
+        .status-badge {
+            font-size: 10px;
+            font-weight: 900;
+            text-transform: uppercase;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .animate-float {
+            animation: float 3s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+    </style>
+</head>
+<body class="pb-24">
 
-// --- Cấu hình Firebase ---
-const firebaseConfig = JSON.parse(__firebase_config);
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'lumos-race-app';
-
-// --- Cấu hình Lịch Đua ---
-const RACE_SCHEDULE = [
-  { id: 1, title: "Thân Mật + Hẹn Hò + Khí", duration: 3, categories: ["Thân Mật", "Hẹn Hò", "Khí"] },
-  { id: 2, title: "Tư Chất + Bạc + Dược", duration: 3, categories: ["Tư Chất", "Bạc", "Dược"] },
-  { id: 3, title: "Thể Lực + Mèo + Cây", duration: 3, categories: ["Thể Lực", "Mèo", "Cây"] },
-  { id: 4, title: "Luân Chiến + Thân Mật + Hoa + Khí", duration: 4, categories: ["Luân Chiến", "Thân Mật", "Hoa", "Khí"] },
-  { id: 5, title: "Thể Lực + Tư Chất + Cầu Nguyện", duration: 4, categories: ["Thể Lực", "Tư Chất", "Cầu Nguyện"] },
-];
-
-const START_DATE = new Date(2026, 2, 23); // Ngày bắt đầu chu kỳ: 23/03/2026
-const TOTAL_CYCLE_DAYS = RACE_SCHEDULE.reduce((a, b) => a + b.duration, 0);
-
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [players, setPlayers] = useState([]);
-  const [view, setView] = useState('board'); // 'board', 'queue', 'reg'
-  const [searchTerm, setSearchTerm] = useState("");
-  const [loading, setLoading] = useState(true);
-
-  // Form State
-  const [regName, setRegName] = useState("");
-  const [regCategory, setRegCategory] = useState("Thân Mật");
-  const [regTop, setRegTop] = useState("Top 1");
-
-  // 1. Khởi tạo Auth
-  useEffect(() => {
-    const initAuth = async () => {
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        await signInWithCustomToken(auth, __initial_auth_token);
-      } else {
-        await signInAnonymously(auth);
-      }
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, setUser);
-    return () => unsubscribe();
-  }, []);
-
-  // 2. Lấy dữ liệu Realtime từ Cloud
-  useEffect(() => {
-    if (!user) return;
-    const q = collection(db, 'artifacts', appId, 'public', 'data', 'players');
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const playerList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setPlayers(playerList);
-      setLoading(false);
-    }, (error) => {
-      console.error("Firestore error:", error);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, [user]);
-
-  // 3. Tính toán Chặng Đua Hiện Tại
-  const currentRace = useMemo(() => {
-    const now = new Date();
-    const diffMs = now - START_DATE;
-    const diffDaysFull = diffMs / (1000 * 60 * 60 * 24);
-    const dayInCycle = ((Math.floor(diffDaysFull) % TOTAL_CYCLE_DAYS) + TOTAL_CYCLE_DAYS) % TOTAL_CYCLE_DAYS;
-
-    let acc = 0;
-    for (let race of RACE_SCHEDULE) {
-      if (dayInCycle >= acc && dayInCycle < acc + race.duration) {
-        return { 
-          ...race, 
-          remaining: Math.ceil(race.duration - (dayInCycle - acc)),
-          isCurrent: true 
-        };
-      }
-      acc += race.duration;
-    }
-    return RACE_SCHEDULE[0];
-  }, []);
-
-  // 4. Logic tính ngày dự kiến lượt đua (Logic thông minh)
-  const getExpectedDate = (category, playerTop, regDate) => {
-    const now = new Date();
-    const diffMs = now - START_DATE;
-    const currentCycleCount = Math.floor(diffMs / (1000 * 60 * 60 * 24 * TOTAL_CYCLE_DAYS));
-    
-    // Tìm index chặng có category này
-    const raceIndex = RACE_SCHEDULE.findIndex(r => r.categories.includes(category));
-    if (raceIndex === -1) return "N/A";
-
-    let startDayInCycle = 0;
-    for (let i = 0; i < raceIndex; i++) startDayInCycle += RACE_SCHEDULE[i].duration;
-
-    // Hàng chờ theo Category + Top
-    const queue = players
-      .filter(p => p.category === category && p.top === playerTop && p.status !== 'Đã đạt')
-      .sort((a, b) => a.regDate - b.regDate);
-    
-    const rank = queue.findIndex(p => p.regDate === regDate);
-    if (rank === -1) return "Đang tính...";
-
-    const cyclesNeeded = rank; // Mỗi chu kỳ chỉ giải quyết 1 người cho mỗi cặp (Category, Top)
-    const totalDaysFromStart = (currentCycleCount + cyclesNeeded) * TOTAL_CYCLE_DAYS + startDayInCycle;
-    
-    const date = new Date(START_DATE.getTime());
-    date.setDate(date.getDate() + totalDaysFromStart);
-    
-    return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
-  };
-
-  // --- Thao tác dữ liệu ---
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    if (!regName.trim() || !user) return;
-
-    const isCurrent = currentRace.categories.includes(regCategory);
-    const newPlayer = {
-      name: regName.toUpperCase().trim(),
-      category: regCategory,
-      top: regTop,
-      status: isCurrent ? 'Đang đua' : 'Chờ lượt',
-      regDate: Date.now(),
-      createdBy: user.uid
-    };
-
-    try {
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'players'), newPlayer);
-      setRegName("");
-      setView('queue');
-    } catch (err) {
-      console.error("Lưu thất bại:", err);
-    }
-  };
-
-  const updateStatus = async (id, status) => {
-    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'players', id);
-    await updateDoc(docRef, { 
-      status: status === 'Đã đạt' ? 'Đang đua' : 'Đã đạt',
-      finishDate: status !== 'Đã đạt' ? Date.now() : null 
-    });
-  };
-
-  const deletePlayer = async (id) => {
-    if (confirm("Xác nhận xóa thành viên này?")) {
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', id));
-    }
-  };
-
-  if (loading) return (
-    <div className="min-h-screen bg-[#0a0b14] flex items-center justify-center">
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-slate-400 font-bold text-xs tracking-widest uppercase animate-pulse">Đang kết nối Cloud...</p>
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="min-h-screen bg-[#0a0b14] text-slate-200 font-sans pb-20">
-      {/* Header Banner - Giống ảnh mẫu */}
-      <div className="p-6 max-w-5xl mx-auto">
-        <div className="bg-[#121421] rounded-3xl p-8 border border-slate-800/50 flex flex-col md:flex-row justify-between items-center relative overflow-hidden group">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
-          <div className="z-10 text-center md:text-left">
-            <span className="bg-indigo-500/10 text-indigo-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest mb-4 inline-block border border-indigo-500/20">
-              Sự kiện hiện tại
-            </span>
-            <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight uppercase leading-none mt-2">
-              {currentRace.title}
-            </h1>
-          </div>
-          <div className="mt-6 md:mt-0 z-10 flex flex-col items-center md:items-end">
-            <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">Thời gian còn lại</span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-5xl font-black text-yellow-400 italic leading-none">{currentRace.remaining}</span>
-              <span className="text-xl font-black text-yellow-400 italic">Ngày</span>
+    <!-- Header / Current Event Banner -->
+    <header class="p-4 md:p-8 max-w-6xl mx-auto">
+        <div class="glass-card rounded-[32px] p-6 md:p-10 gradient-border flex flex-col md:flex-row justify-between items-center gap-6">
+            <div>
+                <span class="inline-block px-3 py-1 bg-indigo-500/10 text-indigo-400 text-[10px] font-black uppercase tracking-widest rounded-full mb-3 border border-indigo-500/20">
+                    Sự Kiện Đang Diễn Ra
+                </span>
+                <h1 id="current-race-title" class="text-3xl md:text-5xl font-black text-white italic uppercase tracking-tighter">
+                    Thân Mật + Hẹn Hò + Khí
+                </h1>
             </div>
-          </div>
+            <div class="text-center md:text-right">
+                <p class="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Thời gian còn lại</p>
+                <div class="flex items-baseline justify-center md:justify-end gap-2">
+                    <span id="days-left" class="text-5xl md:text-6xl font-black text-yellow-400 italic">03</span>
+                    <span class="text-xl font-black text-yellow-400 italic">Ngày</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Tab -->
+    <nav class="max-w-6xl mx-auto px-4 mb-8">
+        <div class="flex gap-2 overflow-x-auto scrollbar-hide py-2">
+            <button onclick="switchTab('board')" id="btn-board" class="nav-btn active px-6 py-3 rounded-2xl bg-indigo-600 text-white text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all">
+                🏆 Bảng Vàng
+            </button>
+            <button onclick="switchTab('queue')" id="btn-queue" class="nav-btn px-6 py-3 rounded-2xl bg-[#121421] text-slate-500 text-xs font-black uppercase tracking-wider flex items-center gap-2 border border-slate-800 hover:text-white transition-all">
+                ⏳ Hàng Chờ
+            </button>
+            <button onclick="switchTab('register')" id="btn-register" class="nav-btn px-6 py-3 rounded-2xl bg-[#121421] text-slate-500 text-xs font-black uppercase tracking-wider flex items-center gap-2 border border-slate-800 hover:text-white transition-all">
+                ✍️ Đăng Ký
+            </button>
+        </div>
+    </nav>
+
+    <!-- Content Sections -->
+    <main class="max-w-6xl mx-auto px-4">
+        
+        <!-- SECTION: BOARD & QUEUE -->
+        <div id="section-list" class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Left Column: Category 1 Group -->
+            <div class="space-y-6">
+                <div class="flex items-center gap-3 px-2">
+                    <div class="w-1.5 h-6 bg-indigo-500 rounded-full"></div>
+                    <h2 class="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Khu vực Đua Top 1-10</h2>
+                </div>
+                <div id="list-container-1" class="space-y-3">
+                    <!-- Data injected here -->
+                </div>
+            </div>
+
+            <!-- Right Column: Category 2 Group -->
+            <div class="space-y-6">
+                <div class="flex items-center gap-3 px-2">
+                    <div class="w-1.5 h-6 bg-purple-500 rounded-full"></div>
+                    <h2 class="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Khu vực Đua Top 20-50</h2>
+                </div>
+                <div id="list-container-2" class="space-y-3">
+                    <!-- Data injected here -->
+                </div>
+            </div>
         </div>
 
-        {/* Navigation - Giống ảnh mẫu */}
-        <nav className="flex gap-2 mt-8 mb-8 overflow-x-auto pb-2 scrollbar-hide">
-          <button 
-            onClick={() => setView('board')}
-            className={`flex items-center gap-2 px-6 py-3 rounded-2xl transition-all whitespace-nowrap text-xs font-black uppercase tracking-wider ${
-              view === 'board' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-[#121421] text-slate-500 hover:text-slate-300 border border-slate-800'
-            }`}
-          >
-            <Trophy size={16} /> BẢNG VÀNG
-          </button>
-          <button 
-            onClick={() => setView('queue')}
-            className={`flex items-center gap-2 px-6 py-3 rounded-2xl transition-all whitespace-nowrap text-xs font-black uppercase tracking-wider ${
-              view === 'queue' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-[#121421] text-slate-500 hover:text-slate-300 border border-slate-800'
-            }`}
-          >
-            <History size={16} /> HÀNG CHỜ
-          </button>
-          <button 
-            onClick={() => setView('reg')}
-            className={`flex items-center gap-2 px-6 py-3 rounded-2xl transition-all whitespace-nowrap text-xs font-black uppercase tracking-wider ${
-              view === 'reg' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-[#121421] text-slate-500 hover:text-slate-300 border border-slate-800'
-            }`}
-          >
-            <UserPlus size={16} /> GHI DANH
-          </button>
-        </nav>
-
-        {/* Content Area */}
-        <main className="animate-in fade-in duration-500">
-          {view === 'reg' ? (
-            <div className="max-w-xl mx-auto bg-[#121421] p-10 rounded-[40px] border border-slate-800 shadow-2xl">
-              <div className="text-center mb-10">
-                <div className="w-16 h-16 bg-indigo-500/10 rounded-3xl flex items-center justify-center mx-auto mb-4 border border-indigo-500/20">
-                  <UserPlus className="text-indigo-500" size={32} />
-                </div>
-                <h2 className="text-2xl font-black text-white uppercase tracking-tight">Đăng ký đua top</h2>
-                <p className="text-slate-500 text-xs mt-2 font-medium">Thông tin của bạn sẽ được lưu trực tuyến</p>
-              </div>
-
-              <form onSubmit={handleRegister} className="space-y-8">
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2">Tên Nhân Vật</label>
-                  <input 
-                    type="text"
-                    required
-                    placeholder="NHẬP TÊN GAME..."
-                    className="w-full bg-[#0a0b14] border-2 border-slate-800 rounded-2xl p-5 text-white font-bold outline-none focus:border-indigo-500 transition-all placeholder:text-slate-700 uppercase"
-                    value={regName}
-                    onChange={(e) => setRegName(e.target.value)}
-                  />
+        <!-- SECTION: REGISTER (Đẹp hơn, chuyên nghiệp hơn) -->
+        <div id="section-register" class="hidden max-w-xl mx-auto">
+            <div class="glass-card rounded-[40px] p-8 md:p-12 border border-indigo-500/10 shadow-2xl relative overflow-hidden">
+                <div class="absolute -top-24 -right-24 w-48 h-48 bg-indigo-600/10 rounded-full blur-3xl"></div>
+                
+                <div class="text-center mb-10">
+                    <h2 class="text-3xl font-black text-white uppercase italic tracking-tighter mb-2">Ghi Danh Đua Top</h2>
+                    <p class="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Dữ liệu sẽ được cập nhật vào danh sách chờ</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2">Loại Hình</label>
-                    <select 
-                      className="w-full bg-[#0a0b14] border-2 border-slate-800 rounded-2xl p-5 text-sm text-white font-bold outline-none focus:border-indigo-500 appearance-none"
-                      value={regCategory}
-                      onChange={(e) => setRegCategory(e.target.value)}
-                    >
-                      {["Thân Mật", "Hẹn Hò", "Khí", "Tư Chất", "Bạc", "Dược", "Thể Lực", "Mèo", "Cây", "Luân Chiến", "Hoa"].map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2">Mục Tiêu</label>
-                    <select 
-                      className="w-full bg-[#0a0b14] border-2 border-slate-800 rounded-2xl p-5 text-sm text-white font-bold outline-none focus:border-indigo-500 appearance-none"
-                      value={regTop}
-                      onChange={(e) => setRegTop(e.target.value)}
-                    >
-                      {["Top 1", "Top 2", "Top 3", "Top 5", "Top 10", "Top 20", "Top 50"].map(t => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <button className="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-black py-5 rounded-2xl shadow-xl shadow-indigo-500/20 transition-all active:scale-[0.98] uppercase tracking-[0.15em] text-sm">
-                  Hoàn Tất Ghi Danh
-                </button>
-              </form>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Search Bar */}
-              <div className="relative max-w-md">
-                <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-600" size={18} />
-                <input 
-                  type="text"
-                  placeholder="Tìm kiếm đồng đội..."
-                  className="w-full bg-[#121421] border border-slate-800 rounded-2xl py-4 pl-14 pr-6 text-sm text-white outline-none focus:border-indigo-500 transition-all shadow-lg shadow-black/20"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-
-              {/* Grid Lists - Chia 2 cột như ảnh mẫu */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {["Thân Mật", "Hẹn Hò", "Khí", "Tư Chất", "Bạc", "Dược"].slice(0, 2).map(catTitle => (
-                  <div key={catTitle} className="space-y-4">
-                    <div className="flex items-center gap-3 px-2">
-                      <div className="w-1 h-6 bg-indigo-500 rounded-full"></div>
-                      <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Bảng {catTitle}</h3>
+                <form id="reg-form" class="space-y-8">
+                    <div class="space-y-2">
+                        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-4">Tên Nhân Vật</label>
+                        <input type="text" id="reg-name" required placeholder="VÍ DỤ: LUMOS_99" class="custom-input w-full p-5 rounded-2xl text-white font-black uppercase placeholder:text-slate-800">
                     </div>
-                    
-                    <div className="space-y-3">
-                      {players
-                        .filter(p => p.category === catTitle)
-                        .filter(p => p.name.includes(searchTerm.toUpperCase()))
-                        .filter(p => view === 'board' ? p.status === 'Đã đạt' : p.status !== 'Đã đạt')
-                        .sort((a, b) => a.regDate - b.regDate)
-                        .map((player, idx) => (
-                          <div key={player.id} className="bg-[#121421] p-5 rounded-3xl border border-slate-800/50 flex justify-between items-center group hover:bg-[#1a1c2e] transition-all hover:-translate-y-1">
-                            <div className="flex items-center gap-5">
-                              <span className="text-[10px] font-black text-slate-700 w-4">#{idx + 1}</span>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <h4 className="font-black text-white text-sm tracking-wide uppercase">{player.name}</h4>
-                                  <span className="text-[9px] font-black bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded uppercase">{player.top}</span>
-                                </div>
-                                <div className="flex items-center gap-3 mt-1">
-                                  {view === 'queue' ? (
-                                    <>
-                                      <span className="text-[9px] font-black text-blue-500 uppercase flex items-center gap-1">
-                                        <div className="w-1 h-1 rounded-full bg-blue-500 animate-pulse"></div> Đang đua
-                                      </span>
-                                      <span className="text-slate-600 text-[10px]">•</span>
-                                      <span className="text-[9px] font-black text-slate-500 uppercase">
-                                        Lượt: <span className="text-yellow-500">{getExpectedDate(player.category, player.top, player.regDate)}</span>
-                                      </span>
-                                    </>
-                                  ) : (
-                                    <span className="text-[9px] font-black text-emerald-500 uppercase flex items-center gap-1">
-                                      <CheckCircle2 size={10} /> Đã xong
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
 
-                            <div className="flex items-center gap-2">
-                              {/* Nút hành động hiển thị khi hover */}
-                              <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
-                                <button 
-                                  onClick={() => updateStatus(player.id, player.status)}
-                                  className={`p-2 rounded-xl transition-all ${
-                                    player.status === 'Đã đạt' 
-                                    ? 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20' 
-                                    : 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
-                                  }`}
-                                  title={player.status === 'Đã đạt' ? "Đưa về chờ" : "Đánh dấu hoàn thành"}
-                                >
-                                  {player.status === 'Đã đạt' ? <Clock size={16} /> : <CheckCircle2 size={16} />}
-                                </button>
-                                <button 
-                                  onClick={() => deletePlayer(player.id)}
-                                  className="p-2 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500/20 transition-all"
-                                  title="Xóa"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              </div>
-                              
-                              {/* Trạng thái mặc định */}
-                              <div className="group-hover:hidden flex items-center justify-center bg-slate-900/50 w-12 h-12 rounded-2xl border border-slate-800">
-                                {player.status === 'Đã đạt' ? <Trophy size={18} className="text-yellow-500" /> : <Zap size={18} className="text-indigo-500" />}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-
-                      {/* Placeholder Trống */}
-                      {players.filter(p => p.category === catTitle && (view === 'board' ? p.status === 'Đã đạt' : p.status !== 'Đã đạt')).length === 0 && (
-                        <div className="bg-[#121421]/30 border-2 border-dashed border-slate-800/50 rounded-3xl p-8 flex flex-col items-center justify-center opacity-40">
-                          <Trophy size={24} className="text-slate-700 mb-2" />
-                          <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Trống</span>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-4">Loại Hình</label>
+                            <select id="reg-type" class="custom-input w-full p-5 rounded-2xl text-white font-black appearance-none">
+                                <option>Thân Mật</option>
+                                <option>Hẹn Hò</option>
+                                <option>Khí</option>
+                                <option>Tư Chất</option>
+                                <option>Bạc</option>
+                                <option>Dược</option>
+                            </select>
                         </div>
-                      )}
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-4">Mục Tiêu</label>
+                            <select id="reg-top" class="custom-input w-full p-5 rounded-2xl text-white font-black appearance-none">
+                                <option>Top 1</option>
+                                <option>Top 3</option>
+                                <option>Top 5</option>
+                                <option>Top 10</option>
+                            </select>
+                        </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </main>
-      </div>
 
-      {/* Footer Branding */}
-      <footer className="fixed bottom-0 left-0 w-full p-4 border-t border-slate-800 bg-[#0a0b14]/80 backdrop-blur-md z-50">
-        <div className="max-w-5xl mx-auto flex justify-between items-center px-4">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Lumos Cloud Active</span>
-          </div>
-          <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-            {players.length} Users Tracked
-          </div>
+                    <button type="submit" class="w-full py-5 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl text-white font-black uppercase tracking-widest shadow-xl shadow-indigo-500/20 hover:scale-[1.02] active:scale-95 transition-all">
+                        Xác Nhận Đăng Ký
+                    </button>
+                </form>
+            </div>
         </div>
-      </footer>
+
+    </main>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white text-black px-6 py-3 rounded-full font-black text-xs uppercase tracking-widest shadow-2xl opacity-0 translate-y-10 transition-all pointer-events-none z-[100]">
+        Đã cập nhật dữ liệu!
     </div>
-  );
-}
+
+    <script>
+        // --- DATA SYSTEM (Dùng LocalStorage để không cần backend) ---
+        let players = JSON.parse(localStorage.getItem('lumos_race_players')) || [
+            { id: 1, name: "THIẾU GIA", type: "Thân Mật", top: "Top 1", status: "completed", date: "2024-03-20" },
+            { id: 2, name: "CÔNG CHÚA", type: "Hẹn Hò", top: "Top 3", status: "waiting", date: "2024-03-22" },
+            { id: 3, name: "LUMOS_ADM", type: "Khí", top: "Top 1", status: "completed", date: "2024-03-21" }
+        ];
+
+        const CATEGORIES = ["Thân Mật", "Hẹn Hò", "Khí", "Tư Chất", "Bạc", "Dược"];
+        let currentTab = 'board';
+
+        // --- CORE FUNCTIONS ---
+        function switchTab(tab) {
+            currentTab = tab;
+            // UI Toggle
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('bg-indigo-600', 'text-white');
+                btn.classList.add('bg-[#121421]', 'text-slate-500');
+            });
+            document.getElementById(`btn-${tab}`).classList.remove('bg-[#121421]', 'text-slate-500');
+            document.getElementById(`btn-${tab}`).classList.add('bg-indigo-600', 'text-white');
+
+            // Section Toggle
+            if (tab === 'register') {
+                document.getElementById('section-list').classList.add('hidden');
+                document.getElementById('section-register').classList.remove('hidden');
+            } else {
+                document.getElementById('section-list').classList.remove('hidden');
+                document.getElementById('section-register').classList.add('hidden');
+                renderList();
+            }
+        }
+
+        function renderList() {
+            const container1 = document.getElementById('list-container-1');
+            const container2 = document.getElementById('list-container-2');
+            container1.innerHTML = "";
+            container2.innerHTML = "";
+
+            const filteredPlayers = players.filter(p => {
+                if (currentTab === 'board') return p.status === 'completed';
+                if (currentTab === 'queue') return p.status === 'waiting';
+                return true;
+            });
+
+            filteredPlayers.forEach((p, index) => {
+                const card = `
+                    <div class="glass-card p-5 rounded-3xl flex justify-between items-center group hover:bg-[#1a1c2e] transition-all border border-slate-800/50">
+                        <div class="flex items-center gap-4">
+                            <span class="text-[10px] font-black text-slate-700 w-4">#${index + 1}</span>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h3 class="font-black text-white text-sm uppercase tracking-wide">${p.name}</h3>
+                                    <span class="text-[9px] font-black bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded uppercase">${p.top}</span>
+                                </div>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <span class="text-[9px] font-black text-slate-500 uppercase">${p.type}</span>
+                                    <span class="text-slate-700 text-[10px]">•</span>
+                                    <span class="text-[9px] font-black ${p.status === 'completed' ? 'text-emerald-500' : 'text-blue-500'} uppercase">
+                                        ${p.status === 'completed' ? '✓ Đã Đạt' : '⏳ Dự kiến: ' + calculateExpectedDate(p)}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                            <button onclick="toggleStatus(${p.id})" class="p-2 bg-emerald-500/10 text-emerald-500 rounded-xl hover:bg-emerald-500/20">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                            </button>
+                            <button onclick="deletePlayer(${p.id})" class="p-2 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500/20">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                if (index % 2 === 0) container1.innerHTML += card;
+                else container2.innerHTML += card;
+            });
+
+            if (filteredPlayers.length === 0) {
+                const empty = `<div class="p-10 text-center border-2 border-dashed border-slate-800 rounded-[32px] opacity-30">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Chưa có dữ liệu</p>
+                </div>`;
+                container1.innerHTML = empty;
+                container2.innerHTML = empty;
+            }
+        }
+
+        function calculateExpectedDate(player) {
+            // Giả lập logic tính ngày: Cứ mỗi người cùng loại hình sẽ cách nhau 17 ngày (1 chu kỳ)
+            const sameTypeQueue = players.filter(p => p.type === player.type && p.status === 'waiting');
+            const pos = sameTypeQueue.findIndex(p => p.id === player.id);
+            const date = new Date();
+            date.setDate(date.getDate() + (pos * 17) + 3);
+            return date.toLocaleDateString('vi-VN', {day: '2-digit', month: '2-digit'});
+        }
+
+        function toggleStatus(id) {
+            const p = players.find(p => p.id === id);
+            if (p) {
+                p.status = p.status === 'completed' ? 'waiting' : 'completed';
+                saveAndRefresh();
+            }
+        }
+
+        function deletePlayer(id) {
+            if (confirm("Xóa thành viên này?")) {
+                players = players.filter(p => p.id !== id);
+                saveAndRefresh();
+            }
+        }
+
+        function saveAndRefresh() {
+            localStorage.setItem('lumos_race_players', JSON.stringify(players));
+            renderList();
+            showToast();
+        }
+
+        function showToast() {
+            const t = document.getElementById('toast');
+            t.classList.remove('opacity-0', 'translate-y-10');
+            setTimeout(() => t.classList.add('opacity-0', 'translate-y-10'), 2000);
+        }
+
+        // --- FORM HANDLING ---
+        document.getElementById('reg-form').onsubmit = (e) => {
+            e.preventDefault();
+            const name = document.getElementById('reg-name').value;
+            const type = document.getElementById('reg-type').value;
+            const top = document.getElementById('reg-top').value;
+
+            const newPlayer = {
+                id: Date.now(),
+                name: name.toUpperCase(),
+                type: type,
+                top: top,
+                status: 'waiting',
+                date: new Date().toISOString()
+            };
+
+            players.push(newPlayer);
+            saveAndRefresh();
+            document.getElementById('reg-form').reset();
+            switchTab('queue');
+        };
+
+        // Khởi tạo ban đầu
+        window.onload = () => {
+            renderList();
+        };
+    </script>
+</body>
+</html>
