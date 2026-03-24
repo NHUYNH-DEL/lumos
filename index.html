@@ -37,9 +37,8 @@
 
         const ALL_UNIQUE_CATEGORIES = Array.from(new Set(RACE_SCHEDULE.flatMap(r => r.categories))).sort();
         
-        // Cấu hình mốc thời gian (Mặc định: Bắt đầu chu kỳ từ hôm qua để hôm nay còn 2 ngày cho chặng 1)
-        const START_DATE = new Date(); 
-        START_DATE.setDate(START_DATE.getDate() - 1); 
+        // Cấu hình mốc thời gian: Bắt đầu chu kỳ từ ngày 23/03/2026 (theo ví dụ của bạn)
+        const START_DATE = new Date(2026, 2, 23); // Tháng 2 là tháng 3 trong JS
         START_DATE.setHours(0, 0, 0, 0);
 
         const TOTAL_CYCLE_DAYS = RACE_SCHEDULE.reduce((a, b) => a + b.duration, 0);
@@ -54,7 +53,7 @@
             const [view, setView] = useState('active-race');
             const [searchTerm, setSearchTerm] = useState('');
             const [activeTab, setActiveTab] = useState('All');
-            const [currentRaceInfo, setCurrentRaceInfo] = useState({ index: 0, remaining: 2, categories: ["Thân Mật", "Hẹn Hò", "Khí"] });
+            const [currentRaceInfo, setCurrentRaceInfo] = useState({ index: 0, remaining: 0, categories: [] });
 
             const [regName, setRegName] = useState('');
             const [regCategory, setRegCategory] = useState('');
@@ -90,8 +89,8 @@
                 return () => clearInterval(timer);
             }, []);
 
-            // Hàm tính ngày dự kiến dựa trên lịch trình
-            const getExpectedDate = (category, rankInQueue) => {
+            // Hàm tính ngày dự kiến: Sửa lỗi tính toán dựa trên Top
+            const getExpectedDate = (category, playerTop, playerId) => {
                 const now = new Date();
                 const diffMs = now - START_DATE;
                 const diffDaysFull = diffMs / (1000 * 60 * 60 * 24);
@@ -107,14 +106,20 @@
                     startDayOfRaceInCycle += RACE_SCHEDULE[i].duration;
                 }
 
-                // Tính xem cần bao nhiêu chu kỳ nữa (dựa trên hàng chờ)
-                // Giả sử mỗi chặng giải quyết được 1 người trong hàng chờ cho mỗi Top
-                // Ở đây đơn giản hóa: rankInQueue là số thứ tự trong danh sách chờ của Category đó
-                const cyclesNeeded = Math.floor(rankInQueue / 1); // 1 người/1 chặng
+                // Lọc danh sách những người đang chờ cùng Category và cùng Top
+                const queueForThisTop = players
+                    .filter(p => p.status !== 'Đã đạt' && p.category === category && p.top === playerTop)
+                    .sort((a, b) => a.regDate - b.regDate);
+                
+                const rankInQueue = queueForThisTop.findIndex(p => p.id === playerId);
+                if (rankInQueue === -1) return "N/A";
+
+                // Mỗi chu kỳ giải quyết được 1 lượt cho mỗi Top của category đó
+                const cyclesNeeded = rankInQueue; 
 
                 let totalDaysFromStart = (currentCycleCount + cyclesNeeded) * TOTAL_CYCLE_DAYS + startDayOfRaceInCycle;
                 
-                // Nếu chặng này trong chu kỳ hiện tại đã qua hoặc đang diễn ra nhưng người này ở lượt sau
+                // Nếu chặng này trong chu kỳ hiện tại đã kết thúc, phải dời sang chu kỳ sau
                 if (dayInCycle > startDayOfRaceInCycle + RACE_SCHEDULE[raceIndex].duration) {
                     totalDaysFromStart += TOTAL_CYCLE_DAYS;
                 }
@@ -220,7 +225,7 @@
                         <section className="bg-gradient-to-br from-indigo-900/40 via-slate-900 to-black border border-indigo-500/20 rounded-[2.5rem] p-8 shadow-2xl flex flex-col md:flex-row justify-between items-center gap-6">
                             <div>
                                 <span className="text-[10px] font-black text-yellow-500 uppercase tracking-widest block mb-2 px-3 py-1 bg-yellow-500/10 rounded-full w-fit">Sự kiện hiện tại</span>
-                                <h2 className="text-3xl sm:text-4xl font-black text-white italic uppercase tracking-tighter leading-tight">{RACE_SCHEDULE[currentRaceInfo.index]?.title}</h2>
+                                <h2 className="text-3xl sm:text-4xl font-black text-white italic uppercase tracking-tighter leading-tight">{RACE_SCHEDULE[currentRaceInfo.index]?.title || "Đang tải..."}</h2>
                             </div>
                             <div className="bg-black/40 px-10 py-5 rounded-3xl border border-yellow-500/20 text-center backdrop-blur-sm min-w-[200px]">
                                 <span className="text-[10px] font-bold text-yellow-500/60 uppercase">CÒN LẠI</span>
@@ -292,7 +297,7 @@
                                                                     </span>
                                                                     <span className="text-[8px] text-slate-500">•</span>
                                                                     <span className="text-[8px] font-black text-yellow-500/80 uppercase">
-                                                                        Lượt: {getExpectedDate(p.category, idx)}
+                                                                        Lượt: {getExpectedDate(p.category, p.top, p.id)}
                                                                     </span>
                                                                 </div>
                                                             </div>
