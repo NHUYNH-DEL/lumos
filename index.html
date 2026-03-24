@@ -5,41 +5,46 @@ import {
   collection, 
   doc, 
   onSnapshot, 
+  setDoc, 
   deleteDoc, 
   updateDoc, 
-  addDoc
+  query, 
+  addDoc 
 } from 'firebase/firestore';
 import { 
   getAuth, 
   signInAnonymously, 
-  onAuthStateChanged,
+  onAuthStateChanged, 
   signInWithCustomToken 
 } from 'firebase/auth';
 import { 
   Trophy, 
   Zap, 
+  PlusCircle, 
+  Users, 
+  Settings, 
   Trash2, 
-  Search,
-  ArrowUpCircle,
-  History,
-  Calendar,
-  UserPlus
+  CheckCircle2, 
+  Clock, 
+  ChevronRight, 
+  Search, 
+  ArrowUpRight 
 } from 'lucide-react';
 
-// --- Cấu hình Firebase ---
+// --- Cấu hình Firebase (Lấy từ môi trường hệ thống) ---
 const firebaseConfig = JSON.parse(__firebase_config);
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'lumos-race-app';
 
-// --- Cấu hình Lịch Đua 17 ngày ---
+// --- Cấu hình Lịch Đua ---
 const RACE_SCHEDULE = [
-    { id: 1, title: "Thân Mật + Hẹn Hò + Khí", duration: 3, categories: ["Thân Mật", "Hẹn Hò", "Khí"] },
-    { id: 2, title: "Tư Chất + Bạc + Dược", duration: 3, categories: ["Tư Chất", "Bạc", "Dược"] },
-    { id: 3, title: "Thế Lực + Mèo + Cây", duration: 3, categories: ["Thế Lực", "Mèo", "Cây"] },
-    { id: 4, title: "Luận Chiến + Thân Mật + Hoa + Khí", duration: 4, categories: ["Luận Chiến", "Thân Mật", "Hoa", "Khí"] },
-    { id: 5, title: "Thế Lực + Tư Chất + Cầu Nguyện", duration: 4, categories: ["Thế Lực", "Tư Chất", "Cầu Nguyện"] },
+  { id: 1, title: "Thân Mật + Hẹn Hò + Khí", duration: 3, categories: ["Thân Mật", "Hẹn Hò", "Khí"] },
+  { id: 2, title: "Tư Chất + Bạc + Dược", duration: 3, categories: ["Tư Chất", "Bạc", "Dược"] },
+  { id: 3, title: "Thể Lực + Mèo + Cây", duration: 3, categories: ["Thể Lực", "Mèo", "Cây"] },
+  { id: 4, title: "Luân Chiến + Thân Mật + Hoa + Khí", duration: 4, categories: ["Luân Chiến", "Thân Mật", "Hoa", "Khí"] },
+  { id: 5, title: "Thể Lực + Tư Chất + Cầu Nguyện", duration: 4, categories: ["Thể Lực", "Tư Chất", "Cầu Nguyện"] },
 ];
 
 const START_DATE = new Date(2026, 2, 23); // Ngày bắt đầu chu kỳ: 23/03/2026
@@ -48,12 +53,12 @@ const TOTAL_CYCLE_DAYS = RACE_SCHEDULE.reduce((a, b) => a + b.duration, 0);
 export default function App() {
   const [user, setUser] = useState(null);
   const [players, setPlayers] = useState([]);
-  const [view, setView] = useState('board'); 
-  const [searchTerm, setSearchTerm] = useState('');
+  const [view, setView] = useState('board'); // 'board' | 'queue' | 'register'
+  const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
 
   // Form đăng ký
-  const [regName, setRegName] = useState('');
+  const [regName, setRegName] = useState("");
   const [regCategory, setRegCategory] = useState('Hẹn Hò');
   const [regTop, setRegTop] = useState('Top 1');
 
@@ -74,7 +79,6 @@ export default function App() {
   // 2. Lấy dữ liệu Realtime từ Firestore
   useEffect(() => {
     if (!user) return;
-
     const q = collection(db, 'artifacts', appId, 'public', 'data', 'players');
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const playerList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -84,82 +88,43 @@ export default function App() {
       console.error("Firestore error:", error);
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, [user]);
 
-  // 3. Tính toán Chặng Đua Hiện Tại
+  // 3. Logic tính Chặng Đua Hiện Tại
   const currentRace = useMemo(() => {
     const now = new Date();
     const diffMs = now - START_DATE;
     const diffDaysFull = diffMs / (1000 * 60 * 60 * 24);
-    const dayInCycle = diffDaysFull < 0 ? 0 : diffDaysFull % TOTAL_CYCLE_DAYS;
+    const dayInCycle = diffDaysFull % TOTAL_CYCLE_DAYS;
     
     let acc = 0;
     for (let i = 0; i < RACE_SCHEDULE.length; i++) {
-        const race = RACE_SCHEDULE[i];
-        if (dayInCycle >= acc && dayInCycle < acc + race.duration) {
-            return { 
-                ...race, 
-                remaining: Math.ceil(race.duration - (dayInCycle - acc)) 
-            };
-        }
-        acc += race.duration;
+      const race = RACE_SCHEDULE[i];
+      if (dayInCycle >= acc && dayInCycle < acc + race.duration) {
+        return { ...race, remaining: Math.ceil(race.duration - (dayInCycle - acc)) };
+      }
+      acc += race.duration;
     }
     return RACE_SCHEDULE[0];
   }, [players]);
 
-  // 4. Hàm tính ngày dự kiến lượt đua (Logic thông minh)
-  const getExpectedDate = (category, playerTop, regDate) => {
-    const now = new Date();
-    const diffMs = now - START_DATE;
-    const diffDaysFull = diffMs / (1000 * 60 * 60 * 24);
-    const currentCycleCount = Math.floor(diffDaysFull / TOTAL_CYCLE_DAYS);
-    const dayInCycle = diffDaysFull % TOTAL_CYCLE_DAYS;
-
-    const raceIndex = RACE_SCHEDULE.findIndex(r => r.categories.includes(category));
-    if (raceIndex === -1) return "N/A";
-
-    let startDayInCycle = 0;
-    for (let i = 0; i < raceIndex; i++) startDayInCycle += RACE_SCHEDULE[i].duration;
-
-    // Hàng chờ theo Category + Top
-    const queue = players
-      .filter(p => p.category === category && p.top === playerTop && p.status !== 'Đã đạt')
-      .sort((a, b) => a.regDate - b.regDate);
-    
-    const rank = queue.findIndex(p => p.regDate === regDate);
-    const cyclesNeeded = rank > 0 ? rank : 0;
-
-    let totalDaysFromStart = (currentCycleCount + cyclesNeeded) * TOTAL_CYCLE_DAYS + startDayInCycle;
-    
-    // Nếu chặng này đã qua trong chu kỳ hiện tại thì dời sang chu kỳ sau
-    if (dayInCycle > startDayInCycle + RACE_SCHEDULE[raceIndex].duration) {
-      totalDaysFromStart += TOTAL_CYCLE_DAYS;
-    }
-
-    const date = new Date(START_DATE.getTime());
-    date.setDate(date.getDate() + totalDaysFromStart);
-    return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
-  };
-
-  // --- Thao tác dữ liệu ---
+  // 4. Thao tác Dữ liệu
   const handleRegister = async (e) => {
     e.preventDefault();
-    if (!regName) return;
+    if (!regName.trim()) return;
     
-    const isCurrent = currentRace.categories.includes(regCategory);
     const newPlayer = {
       name: regName.toUpperCase().trim(),
       category: regCategory,
       top: regTop,
-      status: isCurrent ? 'Đang đua' : 'Chờ lượt',
+      status: 'Chờ lượt',
       regDate: Date.now(),
       createdBy: user.uid
     };
 
     await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'players'), newPlayer);
-    setRegName('');
+    setRegName("");
     setView('queue');
   };
 
@@ -176,277 +141,227 @@ export default function App() {
   };
 
   if (loading) return (
-    <div className="min-h-screen bg-[#080a0f] flex items-center justify-center">
-      <div className="flex flex-col items-center gap-4">
-        <Zap className="animate-pulse text-indigo-500" size={48} />
-        <p className="text-xs font-black text-indigo-400 tracking-widest animate-bounce">ĐANG KẾT NỐI CLOUD...</p>
-      </div>
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center text-blue-400">
+      <div className="animate-spin mr-2"><Clock size={24} /></div>
+      ĐANG KẾT NỐI CLOUD...
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-[#080a0f] text-slate-300 font-sans pb-24">
+    <div className="min-h-screen bg-[#020617] text-slate-200 font-sans p-4 md:p-8">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-[#080a0f]/90 backdrop-blur-xl border-b border-white/5 p-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
-              <Zap size={20} className="text-white fill-current" />
-            </div>
-            <div>
-              <h1 className="font-black italic text-white tracking-tighter leading-none">LUMOS RACE</h1>
-              <span className="text-[8px] font-bold text-indigo-400 uppercase tracking-[0.2em]">Live Tracking</span>
-            </div>
-          </div>
-          <nav className="flex bg-slate-900/80 p-1.5 rounded-2xl border border-white/5 shadow-inner">
-            <button onClick={() => setView('board')} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all text-[10px] font-black italic uppercase ${view === 'board' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>
-               BẢNG ĐUA
-            </button>
-            <button onClick={() => setView('queue')} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all text-[10px] font-black italic uppercase ${view === 'queue' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>
-               HÀNG CHỜ
-            </button>
-            <button onClick={() => setView('register')} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all text-[10px] font-black italic uppercase ${view === 'register' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>
-               GHI DANH
-            </button>
-          </nav>
+      <header className="max-w-4xl mx-auto mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-4xl font-black italic tracking-tighter text-white flex items-center gap-2">
+            <Zap className="text-yellow-400 fill-yellow-400" /> LUMOS RACE
+          </h1>
+          <p className="text-slate-500 font-medium">Hệ thống quản lý mục tiêu liên server</p>
+        </div>
+        
+        <div className="flex bg-slate-900/50 p-1 rounded-xl border border-slate-800">
+          <button 
+            onClick={() => setView('board')}
+            className={`px-4 py-2 rounded-lg transition-all ${view === 'board' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+          >
+            BẢNG ĐUA
+          </button>
+          <button 
+            onClick={() => setView('queue')}
+            className={`px-4 py-2 rounded-lg transition-all ${view === 'queue' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+          >
+            HÀNG CHỜ
+          </button>
+          <button 
+            onClick={() => setView('register')}
+            className={`px-4 py-2 rounded-lg transition-all ${view === 'register' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+          >
+            GHI DANH
+          </button>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto p-4 space-y-6">
+      <main className="max-w-4xl mx-auto space-y-6">
         {/* Status Section */}
-        <section className="bg-gradient-to-br from-indigo-950/40 to-slate-900 border border-indigo-500/20 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
-             <Trophy size={120} className="text-indigo-500" />
-          </div>
-          <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em]">CHẶNG ĐUA HIỆN TẠI</span>
-              </div>
-              <h2 className="text-3xl md:text-4xl font-black text-white italic uppercase tracking-tighter leading-tight max-w-md">
-                {currentRace.title}
-              </h2>
-            </div>
-            <div className="bg-black/60 backdrop-blur-md px-8 py-5 rounded-[2rem] border border-yellow-500/20 text-center min-w-[160px] shadow-xl">
-                <span className="text-[10px] font-bold text-yellow-500/60 uppercase tracking-widest mb-1 block">CÒN LẠI</span>
-                <p className="text-4xl font-black text-yellow-400 italic tracking-tighter leading-none">
-                  {currentRace.remaining} <span className="text-sm font-bold text-yellow-500/40">NGÀY</span>
-                </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-gradient-to-br from-indigo-900/40 to-slate-900 p-5 rounded-2xl border border-indigo-500/30">
+            <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Đang diễn ra</span>
+            <h2 className="text-xl font-bold text-white mt-1">{currentRace.title}</h2>
+            <div className="flex items-center gap-2 mt-3 text-sm text-indigo-300">
+              <Clock size={14} /> Còn {currentRace.remaining} ngày
             </div>
           </div>
-        </section>
+          
+          <div className="bg-slate-900/80 p-5 rounded-2xl border border-slate-800 flex flex-col justify-center">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Tổng thành viên</span>
+            <div className="text-3xl font-black text-white mt-1">{players.length}</div>
+          </div>
 
-        {/* Board View */}
-        {view === 'board' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {currentRace.categories.map(cat => (
-              <div key={cat} className="bg-slate-900/40 rounded-[2rem] p-6 border border-white/5 space-y-4 hover:border-indigo-500/20 transition-all">
-                <div className="flex items-center gap-3 border-l-4 border-indigo-500 pl-3">
-                  <h3 className="text-xs font-black uppercase text-white italic tracking-wider">BẢNG {cat}</h3>
-                </div>
-                <div className="space-y-3">
-                  {["Top 1", "Top 2", "Top 3"].map(t => {
-                    const p = players.find(x => x.category === cat && x.top === t && x.status === 'Đang đua');
-                    return (
-                      <div key={t} className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${p ? 'bg-slate-900 border-indigo-500/40 shadow-lg' : 'bg-slate-900/10 border-dashed border-white/5 opacity-40'}`}>
-                        <div className="flex items-center gap-4">
-                          <Trophy size={16} className={t === 'Top 1' ? 'text-yellow-500' : t === 'Top 2' ? 'text-slate-400' : 'text-amber-700'} />
-                          <div>
-                            <p className="text-[9px] font-bold text-slate-500 uppercase">{t}</p>
-                            <p className="text-xs font-black text-white uppercase italic">{p ? p.name : 'TRỐNG'}</p>
-                          </div>
-                        </div>
-                        {p && (
-                          <button onClick={() => updateStatus(p.id, 'Đã đạt')} className="w-8 h-8 flex items-center justify-center bg-emerald-600/20 text-emerald-500 hover:bg-emerald-600 hover:text-white rounded-xl transition-all shadow-lg">
-                            <ArrowUpCircle size={18} />
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Queue View */}
-        {view === 'queue' && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="flex gap-4 items-center bg-slate-900/80 p-4 rounded-2xl border border-white/5 shadow-xl">
-              <Search size={20} className="text-slate-500 ml-2" />
-              <input 
-                type="text" 
-                placeholder="TÌM KIẾM TÊN NHÂN VẬT..." 
-                className="bg-transparent border-none text-xs font-bold text-white outline-none w-full placeholder:text-slate-700"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {Array.from(new Set(players.filter(p => p.status !== 'Đã đạt').map(p => p.category))).sort().map(cat => (
-                <div key={cat} className="space-y-4">
-                  <div className="flex justify-between items-end border-b-2 border-indigo-500/20 pb-2 px-1">
-                    <h3 className="text-xs font-black text-indigo-400 uppercase tracking-[0.2em] italic">{cat}</h3>
-                    <div className="flex items-center gap-1 text-[9px] font-bold text-slate-600 uppercase">
-                      <Calendar size={10} />
-                      <span>Ngày dự kiến</span>
-                    </div>
-                  </div>
-                  <div className="space-y-2.5">
-                    {players
-                      .filter(p => p.category === cat && p.status !== 'Đã đạt' && p.name.includes(searchTerm.toUpperCase()))
-                      .sort((a,b) => a.regDate - b.regDate)
-                      .map((p, idx) => (
-                        <div key={p.id} className="flex items-center justify-between p-4 bg-slate-900/60 rounded-2xl border border-white/5 group hover:border-indigo-500/40 transition-all shadow-md">
-                          <div className="flex items-center gap-4">
-                            <span className="text-[10px] font-black text-slate-700 italic w-4">#{idx + 1}</span>
-                            <div>
-                              <p className="text-xs font-black text-white uppercase italic flex items-center gap-2">
-                                {p.name} 
-                                <span className={`text-[8px] px-1.5 py-0.5 rounded-md font-bold ${p.top === 'Top 1' ? 'bg-yellow-500/10 text-yellow-500' : 'bg-slate-800 text-slate-400'}`}>{p.top}</span>
-                              </p>
-                              <div className="flex items-center gap-3 mt-1">
-                                <span className={`text-[8px] font-black uppercase tracking-tighter ${p.status === 'Đang đua' ? 'text-emerald-400' : 'text-slate-600'}`}>
-                                  ● {p.status}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <span className="text-[11px] font-black text-yellow-500/90 italic bg-yellow-500/5 px-2 py-1 rounded-lg border border-yellow-500/10">
-                              {getExpectedDate(p.category, p.top, p.regDate)}
-                            </span>
-                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all scale-90 group-hover:scale-100">
-                              <button onClick={() => updateStatus(p.id, p.status === 'Đang đua' ? 'Chờ lượt' : 'Đang đua')} className="p-2 bg-indigo-500/10 text-indigo-400 rounded-xl hover:bg-indigo-600 hover:text-white transition-all">
-                                <ArrowUpCircle size={14} />
-                              </button>
-                              <button onClick={() => deletePlayer(p.id)} className="p-2 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-600 hover:text-white transition-all">
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    {players.filter(p => p.category === cat && p.status !== 'Đã đạt').length === 0 && (
-                      <p className="text-[10px] text-slate-700 italic text-center py-4">Chưa có ai đăng ký bảng này</p>
-                    )}
-                  </div>
-                </div>
-              ))}
+          <div className="bg-slate-900/80 p-5 rounded-2xl border border-slate-800 flex flex-col justify-center">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Đã hoàn thành</span>
+            <div className="text-3xl font-black text-emerald-400 mt-1">
+              {players.filter(p => p.status === 'Đã đạt').length}
             </div>
           </div>
-        )}
+        </div>
 
-        {/* Register View */}
+        {/* Dynamic Views */}
         {view === 'register' && (
-          <div className="max-w-md mx-auto bg-slate-900/80 p-10 rounded-[3rem] border border-white/5 shadow-2xl animate-in fade-in zoom-in duration-300 backdrop-blur-sm">
-            <div className="flex flex-col items-center mb-10">
-              <div className="w-14 h-14 bg-emerald-600/20 rounded-2xl flex items-center justify-center text-emerald-500 mb-4">
-                <UserPlus size={28} />
-              </div>
-              <h2 className="text-2xl font-black text-white italic uppercase tracking-tighter">Ghi danh lượt đua</h2>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Hệ thống ghi nhận Cloud 24/7</p>
-            </div>
-
-            <form onSubmit={handleRegister} className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase ml-2 tracking-widest">Tên Nhân Vật (Viết hoa)</label>
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 animate-in fade-in slide-in-from-bottom-4">
+            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <PlusCircle className="text-emerald-400" /> Đăng ký mục tiêu mới
+            </h3>
+            <form onSubmit={handleRegister} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tên nhân vật</label>
                 <input 
-                  required 
-                  type="text" 
-                  value={regName} 
-                  onChange={(e) => setRegName(e.target.value)} 
-                  className="w-full bg-black/60 border-2 border-white/5 rounded-2xl p-4 text-sm font-black text-white uppercase outline-none focus:border-indigo-500/50 transition-all placeholder:text-slate-800" 
-                  placeholder="VÍ DỤ: LÃNH CHÚA"
+                  value={regName}
+                  onChange={(e) => setRegName(e.target.value)}
+                  placeholder="Vd: LUMOS-99"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-white focus:border-emerald-500 outline-none transition-all"
                 />
               </div>
-              
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase ml-2 tracking-widest">Bảng Đua</label>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Loại đua</label>
                   <select 
-                    value={regCategory} 
-                    onChange={(e) => setRegCategory(e.target.value)} 
-                    className="w-full bg-black/60 border-2 border-white/5 rounded-2xl p-4 text-xs font-black text-indigo-400 outline-none focus:border-indigo-500/50 appearance-none cursor-pointer"
+                    value={regCategory}
+                    onChange={(e) => setRegCategory(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-white outline-none"
                   >
-                    {Array.from(new Set(RACE_SCHEDULE.flatMap(r => r.categories))).sort().map(cat => (
-                      <option key={cat} value={cat}>{cat.toUpperCase()}</option>
+                    {["Thân Mật", "Hẹn Hò", "Khí", "Tư Chất", "Bạc", "Dược", "Thể Lực", "Mèo", "Cây", "Luân Chiến", "Hoa", "Cầu Nguyện"].map(c => (
+                      <option key={c} value={c}>{c}</option>
                     ))}
                   </select>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase ml-2 tracking-widest">Mục Tiêu Top</label>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Mục tiêu</label>
                   <select 
-                    value={regTop} 
-                    onChange={(e) => setRegTop(e.target.value)} 
-                    className="w-full bg-black/60 border-2 border-white/5 rounded-2xl p-4 text-xs font-black text-yellow-500 outline-none focus:border-indigo-500/50 appearance-none cursor-pointer"
+                    value={regTop}
+                    onChange={(e) => setRegTop(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-white outline-none"
                   >
-                    <option value="Top 1">TOP 1</option>
-                    <option value="Top 2">TOP 2</option>
-                    <option value="Top 3">TOP 3</option>
+                    {["Top 1", "Top 2", "Top 3", "Top 5", "Top 10", "Top 20"].map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
                   </select>
                 </div>
               </div>
-
-              <button type="submit" className="w-full py-5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[1.5rem] font-black italic shadow-xl shadow-emerald-600/20 transition-all active:scale-95 group">
-                XÁC NHẬN GHI DANH
-                <span className="ml-2 inline-block group-hover:translate-x-1 transition-transform">→</span>
+              <button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg mt-2 shadow-lg shadow-emerald-900/20 transition-all flex items-center justify-center gap-2">
+                XÁC NHẬN GHI DANH <ArrowUpRight size={18} />
               </button>
             </form>
           </div>
         )}
 
-        {/* Finished Players (History) */}
-        {players.some(p => p.status === 'Đã đạt') && (
-          <section className="pt-12 border-t border-white/5 animate-in fade-in duration-700">
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-yellow-500/10 rounded-lg text-yellow-500">
-                  <History size={18} />
-                </div>
-                <h2 className="text-sm font-black text-white italic uppercase tracking-widest">BẢNG VÀNG HOÀN THÀNH</h2>
+        {view === 'board' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                <Trophy className="text-yellow-500" /> Bảng vinh danh
+              </h3>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" size={16} />
+                <input 
+                  placeholder="Tìm tên..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="bg-slate-900 border border-slate-800 rounded-full py-1.5 pl-9 pr-4 text-sm focus:border-indigo-500 outline-none"
+                />
               </div>
-              <span className="text-[9px] font-bold text-slate-600 uppercase">Tổng cộng: {players.filter(p => p.status === 'Đã đạt').length}</span>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {players.filter(p => p.status === 'Đã đạt').sort((a,b) => b.regDate - a.regDate).map(p => (
-                <div key={p.id} className="bg-yellow-500/5 p-4 rounded-2xl border border-yellow-500/10 text-center relative group overflow-hidden">
-                  <p className="text-xs font-black text-yellow-500 italic uppercase truncate mb-1">{p.name}</p>
-                  <div className="flex flex-col gap-0.5">
-                    <p className="text-[8px] text-slate-500 font-bold uppercase">{p.category}</p>
-                    <p className="text-[8px] text-emerald-500/60 font-black uppercase italic">Ngày: {p.finishDate}</p>
+            
+            <div className="grid gap-3">
+              {players
+                .filter(p => p.status === 'Đã đạt' && p.name.includes(searchTerm.toUpperCase()))
+                .map(player => (
+                  <div key={player.id} className="bg-slate-900/40 border border-emerald-500/20 p-4 rounded-xl flex items-center justify-between group">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                        <CheckCircle2 size={20} />
+                      </div>
+                      <div>
+                        <div className="font-bold text-white">{player.name}</div>
+                        <div className="text-xs text-slate-500 uppercase">{player.category} • {player.top}</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs font-bold text-emerald-500 uppercase italic">SUCCESS</div>
+                      <div className="text-[10px] text-slate-600">{player.finishDate}</div>
+                    </div>
                   </div>
-                  <button 
-                    onClick={() => updateStatus(p.id, 'Chờ lượt')}
-                    className="absolute inset-0 bg-indigo-600 rounded-2xl opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] font-black text-white uppercase italic transition-all backdrop-blur-sm"
-                  >
-                    Khôi phục
-                  </button>
+                ))}
+              {players.filter(p => p.status === 'Đã đạt').length === 0 && (
+                <div className="text-center py-12 border-2 border-dashed border-slate-800 rounded-2xl text-slate-600">
+                  Chưa có ai hoàn thành chặng này.
                 </div>
-              ))}
+              )}
             </div>
-          </section>
+          </div>
+        )}
+
+        {view === 'queue' && (
+          <div className="space-y-4">
+            <h3 className="text-xl font-bold flex items-center gap-2">
+              <Users className="text-blue-400" /> Danh sách chờ
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-800">
+                    <th className="py-3 px-4 text-xs font-bold text-slate-500 uppercase">Thành viên</th>
+                    <th className="py-3 px-4 text-xs font-bold text-slate-500 uppercase">Mục tiêu</th>
+                    <th className="py-3 px-4 text-xs font-bold text-slate-500 uppercase">Trạng thái</th>
+                    <th className="py-3 px-4 text-xs font-bold text-slate-500 uppercase text-right">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {players
+                    .filter(p => p.status !== 'Đã đạt')
+                    .sort((a, b) => a.regDate - b.regDate)
+                    .map(player => (
+                      <tr key={player.id} className="border-b border-slate-800/50 hover:bg-slate-900/30 transition-colors">
+                        <td className="py-4 px-4 font-bold text-indigo-300">{player.name}</td>
+                        <td className="py-4 px-4">
+                          <span className="text-xs bg-slate-800 px-2 py-1 rounded text-slate-300 mr-2">{player.category}</span>
+                          <span className="text-xs font-bold text-white">{player.top}</span>
+                        </td>
+                        <td className="py-4 px-4">
+                          <span className="flex items-center gap-1.5 text-xs text-amber-500 font-bold italic">
+                            <Clock size={12} /> CHỜ LƯỢT
+                          </span>
+                        </td>
+                        <td className="py-4 px-4 text-right">
+                          <div className="flex justify-end gap-2">
+                            <button 
+                              onClick={() => updateStatus(player.id, 'Đã đạt')}
+                              className="p-2 hover:bg-emerald-500/20 text-emerald-500 rounded-lg transition-colors"
+                              title="Hoàn thành"
+                            >
+                              <CheckCircle2 size={18} />
+                            </button>
+                            <button 
+                              onClick={() => deletePlayer(player.id)}
+                              className="p-2 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors"
+                              title="Xóa"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+              {players.filter(p => p.status !== 'Đã đạt').length === 0 && (
+                <div className="text-center py-12 text-slate-600">Hàng chờ đang trống.</div>
+              )}
+            </div>
+          </div>
         )}
       </main>
 
-      {/* Cloud Indicator Footer */}
-      <footer className="fixed bottom-0 left-0 right-0 bg-black/90 backdrop-blur-2xl border-t border-white/5 p-3 flex flex-wrap justify-center items-center gap-6 z-[60]">
-        <div className="flex items-center gap-2">
-          <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_#10b981]"></div>
-          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Live Database Connected</span>
-        </div>
-        <div className="h-3 w-px bg-white/10 hidden sm:block"></div>
-        <div className="flex items-center gap-2">
-          <span className="text-[9px] font-black text-slate-500 uppercase italic">Cycle: 17 Days</span>
-        </div>
-        <div className="h-3 w-px bg-white/10 hidden sm:block"></div>
-        <p className="text-[9px] font-black text-indigo-500 uppercase italic tracking-tighter">Lumos Community System</p>
+      <footer className="max-w-4xl mx-auto mt-12 pt-8 border-t border-slate-900 text-center text-slate-600 text-xs">
+        LUMOS RACE SYSTEM • CLOUD EDITION • 2026
       </footer>
     </div>
   );
