@@ -36,11 +36,15 @@
         ];
 
         const ALL_UNIQUE_CATEGORIES = Array.from(new Set(RACE_SCHEDULE.flatMap(r => r.categories))).sort();
-        const START_DATE = new Date("2024-05-19T00:00:00"); 
+        
+        // Điều chỉnh START_DATE lùi lại 1 ngày so với hiện tại để "Còn lại" hiển thị là 2 ngày
+        const START_DATE = new Date(); 
+        START_DATE.setDate(START_DATE.getDate() - 1); 
+        START_DATE.setHours(0, 0, 0, 0);
+
         const TOTAL_CYCLE_DAYS = RACE_SCHEDULE.reduce((a, b) => a + b.duration, 0);
 
         function App() {
-            // KHÔI PHỤC DỮ LIỆU CŨ: Kiểm tra cả 2 key cũ và mới
             const [players, setPlayers] = useState(() => {
                 const oldData = localStorage.getItem('lumos_players');
                 const newData = localStorage.getItem('lumos_v2_players');
@@ -53,7 +57,7 @@
             const [view, setView] = useState('active-race');
             const [searchTerm, setSearchTerm] = useState('');
             const [activeTab, setActiveTab] = useState('All');
-            const [currentRaceInfo, setCurrentRaceInfo] = useState({ index: 0, remaining: 0, categories: [] });
+            const [currentRaceInfo, setCurrentRaceInfo] = useState({ index: 0, remaining: 2, categories: ["Thân Mật", "Hẹn Hò", "Khí"] });
 
             const [regName, setRegName] = useState('');
             const [regCategory, setRegCategory] = useState('');
@@ -68,12 +72,18 @@
                     const now = new Date();
                     const diffMs = now - START_DATE;
                     const diffDaysFull = diffMs / (1000 * 60 * 60 * 24);
-                    const dayInCycle = diffDaysFull % TOTAL_CYCLE_DAYS;
+                    
+                    const dayInCycle = diffDaysFull < 0 ? 0 : diffDaysFull % TOTAL_CYCLE_DAYS;
+                    
                     let acc = 0;
                     for (let i = 0; i < RACE_SCHEDULE.length; i++) {
                         const race = RACE_SCHEDULE[i];
                         if (dayInCycle >= acc && dayInCycle < acc + race.duration) {
-                            setCurrentRaceInfo({ index: i, remaining: Math.ceil(race.duration - (dayInCycle - acc)), categories: race.categories });
+                            setCurrentRaceInfo({ 
+                                index: i, 
+                                remaining: Math.ceil(race.duration - (dayInCycle - acc)), 
+                                categories: race.categories 
+                            });
                             break;
                         }
                         acc += race.duration;
@@ -106,7 +116,14 @@
                 e.preventDefault();
                 saveState();
                 const isCurrent = currentRaceInfo.categories.includes(regCategory);
-                const newEntry = { id: Date.now(), name: regName.toUpperCase(), category: regCategory, top: regTop, status: isCurrent ? "Đang đua" : "Chờ lượt", regDate: Date.now() };
+                const newEntry = { 
+                    id: Date.now(), 
+                    name: regName.toUpperCase(), 
+                    category: regCategory, 
+                    top: regTop, 
+                    status: isCurrent ? "Đang đua" : "Chờ lượt", 
+                    regDate: Date.now() 
+                };
                 setPlayers([...players, newEntry]);
                 setRegName('');
                 setView('queue');
