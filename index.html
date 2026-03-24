@@ -3,326 +3,258 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lumos Race - Hệ Thống Quản Lý Đua Top</title>
+    <title>Lumos Race Management</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #0a0b14;
-            color: #e2e8f0;
-            overflow-x: hidden;
-        }
-        .glass-card {
-            background: rgba(18, 20, 33, 0.8);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        .gradient-border {
-            position: relative;
-        }
-        .gradient-border::after {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0; height: 2px;
-            background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899);
-            border-radius: 2px;
-        }
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .custom-input {
-            background: #0f111a;
-            border: 2px solid #1e293b;
-            transition: all 0.3s ease;
-        }
-        .custom-input:focus {
-            border-color: #6366f1;
-            box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
-            outline: none;
-        }
-        .status-badge {
-            font-size: 10px;
-            font-weight: 900;
-            text-transform: uppercase;
-            padding: 2px 8px;
-            border-radius: 4px;
-        }
-        .animate-float {
-            animation: float 3s ease-in-out infinite;
-        }
-        @keyframes float {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-5px); }
-        }
+        body { font-family: 'Inter', sans-serif; background-color: #05060b; color: #e2e8f0; }
+        .glass-card { background: rgba(15, 17, 26, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.03); }
+        .nav-active { background: #4f46e5; color: white; box-shadow: 0 10px 20px -5px rgba(79, 70, 229, 0.5); }
+        .empty-slot { border: 2px dashed #1e293b; color: #475569; }
+        .custom-input { background: #0f111a; border: 2px solid #1e293b; transition: all 0.2s; }
+        .custom-input:focus { border-color: #4f46e5; outline: none; }
+        .is-postponed { border-left: 4px solid #f59e0b; background: rgba(245, 158, 11, 0.05) !important; }
     </style>
 </head>
 <body class="pb-24">
 
-    <!-- Header / Current Event Banner -->
-    <header class="p-4 md:p-8 max-w-6xl mx-auto">
-        <div class="glass-card rounded-[32px] p-6 md:p-10 gradient-border flex flex-col md:flex-row justify-between items-center gap-6">
-            <div>
-                <span class="inline-block px-3 py-1 bg-indigo-500/10 text-indigo-400 text-[10px] font-black uppercase tracking-widest rounded-full mb-3 border border-indigo-500/20">
-                    Sự Kiện Đang Diễn Ra
-                </span>
-                <h1 id="current-race-title" class="text-3xl md:text-5xl font-black text-white italic uppercase tracking-tighter">
-                    Thân Mật + Hẹn Hò + Khí
-                </h1>
-            </div>
-            <div class="text-center md:text-right">
-                <p class="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Thời gian còn lại</p>
-                <div class="flex items-baseline justify-center md:justify-end gap-2">
-                    <span id="days-left" class="text-5xl md:text-6xl font-black text-yellow-400 italic">03</span>
-                    <span class="text-xl font-black text-yellow-400 italic">Ngày</span>
-                </div>
-            </div>
+    <!-- Header -->
+    <header class="p-6 max-w-6xl mx-auto flex justify-between items-center">
+        <div>
+            <h1 class="text-2xl font-black italic tracking-tighter text-white uppercase">Lumos <span class="text-indigo-500">Race</span></h1>
+            <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em]">Hệ thống quản lý chuyên sâu</p>
         </div>
     </header>
 
-    <!-- Navigation Tab -->
-    <nav class="max-w-6xl mx-auto px-4 mb-8">
-        <div class="flex gap-2 overflow-x-auto scrollbar-hide py-2">
-            <button onclick="switchTab('board')" id="btn-board" class="nav-btn active px-6 py-3 rounded-2xl bg-indigo-600 text-white text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all">
-                🏆 Bảng Vàng
-            </button>
-            <button onclick="switchTab('queue')" id="btn-queue" class="nav-btn px-6 py-3 rounded-2xl bg-[#121421] text-slate-500 text-xs font-black uppercase tracking-wider flex items-center gap-2 border border-slate-800 hover:text-white transition-all">
-                ⏳ Hàng Chờ
-            </button>
-            <button onclick="switchTab('register')" id="btn-register" class="nav-btn px-6 py-3 rounded-2xl bg-[#121421] text-slate-500 text-xs font-black uppercase tracking-wider flex items-center gap-2 border border-slate-800 hover:text-white transition-all">
-                ✍️ Đăng Ký
-            </button>
+    <!-- Navigation -->
+    <nav class="max-w-6xl mx-auto px-4 mb-8 sticky top-4 z-50">
+        <div class="flex p-1.5 bg-[#0f111a] rounded-2xl border border-white/5 gap-1 shadow-2xl">
+            <button onclick="switchSheet('active')" id="nav-active" class="nav-active flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">🏆 Đua Top</button>
+            <button onclick="switchSheet('queue')" id="nav-queue" class="flex-1 py-3 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">⏳ Hàng Chờ</button>
+            <button onclick="switchSheet('register')" id="nav-register" class="flex-1 py-3 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">✍️ Ghi Danh</button>
         </div>
     </nav>
 
-    <!-- Content Sections -->
+    <!-- Main Content -->
     <main class="max-w-6xl mx-auto px-4">
         
-        <!-- SECTION: BOARD & QUEUE -->
-        <div id="section-list" class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <!-- Left Column: Category 1 Group -->
-            <div class="space-y-6">
-                <div class="flex items-center gap-3 px-2">
-                    <div class="w-1.5 h-6 bg-indigo-500 rounded-full"></div>
-                    <h2 class="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Khu vực Đua Top 1-10</h2>
-                </div>
-                <div id="list-container-1" class="space-y-3">
-                    <!-- Data injected here -->
-                </div>
-            </div>
+        <!-- SHEET 1: ĐUA TOP -->
+        <div id="sheet-active" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
 
-            <!-- Right Column: Category 2 Group -->
-            <div class="space-y-6">
-                <div class="flex items-center gap-3 px-2">
-                    <div class="w-1.5 h-6 bg-purple-500 rounded-full"></div>
-                    <h2 class="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Khu vực Đua Top 20-50</h2>
-                </div>
-                <div id="list-container-2" class="space-y-3">
-                    <!-- Data injected here -->
-                </div>
-            </div>
-        </div>
+        <!-- SHEET 2: HÀNG CHỜ -->
+        <div id="sheet-queue" class="hidden space-y-10"></div>
 
-        <!-- SECTION: REGISTER (Đẹp hơn, chuyên nghiệp hơn) -->
-        <div id="section-register" class="hidden max-w-xl mx-auto">
-            <div class="glass-card rounded-[40px] p-8 md:p-12 border border-indigo-500/10 shadow-2xl relative overflow-hidden">
-                <div class="absolute -top-24 -right-24 w-48 h-48 bg-indigo-600/10 rounded-full blur-3xl"></div>
-                
-                <div class="text-center mb-10">
-                    <h2 class="text-3xl font-black text-white uppercase italic tracking-tighter mb-2">Ghi Danh Đua Top</h2>
-                    <p class="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Dữ liệu sẽ được cập nhật vào danh sách chờ</p>
-                </div>
-
-                <form id="reg-form" class="space-y-8">
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-4">Tên Nhân Vật</label>
-                        <input type="text" id="reg-name" required placeholder="VÍ DỤ: LUMOS_99" class="custom-input w-full p-5 rounded-2xl text-white font-black uppercase placeholder:text-slate-800">
+        <!-- SHEET 3: GHI DANH -->
+        <div id="sheet-register" class="hidden max-w-lg mx-auto">
+            <div class="glass-card p-8 rounded-[32px] border border-white/5 shadow-2xl">
+                <h2 class="text-xl font-black text-white uppercase italic text-center mb-8">Đăng ký tham gia</h2>
+                <form id="reg-form" class="space-y-5">
+                    <div>
+                        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-2 block">Tên nhân vật</label>
+                        <input type="text" id="reg-name" required placeholder="" class="custom-input w-full p-4 rounded-xl text-white font-black uppercase tracking-tight">
                     </div>
-
                     <div class="grid grid-cols-2 gap-4">
-                        <div class="space-y-2">
-                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-4">Loại Hình</label>
-                            <select id="reg-type" class="custom-input w-full p-5 rounded-2xl text-white font-black appearance-none">
+                        <div>
+                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-2 block">Bảng đua</label>
+                            <select id="reg-type" class="custom-input w-full p-4 rounded-xl text-white font-black bg-[#0f111a]">
                                 <option>Thân Mật</option>
                                 <option>Hẹn Hò</option>
                                 <option>Khí</option>
                                 <option>Tư Chất</option>
-                                <option>Bạc</option>
-                                <option>Dược</option>
+                                <option>Bạc/Dược</option>
                             </select>
                         </div>
-                        <div class="space-y-2">
-                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-4">Mục Tiêu</label>
-                            <select id="reg-top" class="custom-input w-full p-5 rounded-2xl text-white font-black appearance-none">
+                        <div>
+                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-2 block">Mục tiêu</label>
+                            <select id="reg-top" class="custom-input w-full p-4 rounded-xl text-white font-black bg-[#0f111a]">
                                 <option>Top 1</option>
+                                <option>Top 2</option>
                                 <option>Top 3</option>
-                                <option>Top 5</option>
-                                <option>Top 10</option>
                             </select>
                         </div>
                     </div>
-
-                    <button type="submit" class="w-full py-5 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl text-white font-black uppercase tracking-widest shadow-xl shadow-indigo-500/20 hover:scale-[1.02] active:scale-95 transition-all">
-                        Xác Nhận Đăng Ký
-                    </button>
+                    <button type="submit" class="w-full py-5 bg-indigo-600 rounded-xl text-white font-black uppercase tracking-widest hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-500/20">Xác nhận</button>
                 </form>
             </div>
         </div>
-
     </main>
 
-    <!-- Toast Notification -->
-    <div id="toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white text-black px-6 py-3 rounded-full font-black text-xs uppercase tracking-widest shadow-2xl opacity-0 translate-y-10 transition-all pointer-events-none z-[100]">
-        Đã cập nhật dữ liệu!
-    </div>
+    <!-- Toast UI -->
+    <div id="toast" class="fixed bottom-8 left-1/2 -translate-x-1/2 px-6 py-3 bg-white text-black text-[10px] font-black uppercase tracking-widest rounded-full shadow-2xl opacity-0 transition-all z-[100] pointer-events-none"></div>
 
     <script>
-        // --- DATA SYSTEM (Dùng LocalStorage để không cần backend) ---
-        let players = JSON.parse(localStorage.getItem('lumos_race_players')) || [
-            { id: 1, name: "THIẾU GIA", type: "Thân Mật", top: "Top 1", status: "completed", date: "2024-03-20" },
-            { id: 2, name: "CÔNG CHÚA", type: "Hẹn Hò", top: "Top 3", status: "waiting", date: "2024-03-22" },
-            { id: 3, name: "LUMOS_ADM", type: "Khí", top: "Top 1", status: "completed", date: "2024-03-21" }
-        ];
+        const TYPES = ["Thân Mật", "Hẹn Hò", "Khí", "Tư Chất", "Bạc/Dược"];
+        let players = JSON.parse(localStorage.getItem('lumos_pro_data')) || [];
 
-        const CATEGORIES = ["Thân Mật", "Hẹn Hò", "Khí", "Tư Chất", "Bạc", "Dược"];
-        let currentTab = 'board';
-
-        // --- CORE FUNCTIONS ---
-        function switchTab(tab) {
-            currentTab = tab;
-            // UI Toggle
-            document.querySelectorAll('.nav-btn').forEach(btn => {
-                btn.classList.remove('bg-indigo-600', 'text-white');
-                btn.classList.add('bg-[#121421]', 'text-slate-500');
+        function switchSheet(sheet) {
+            document.querySelectorAll('main > div').forEach(d => d.classList.add('hidden'));
+            document.getElementById(`sheet-${sheet}`).classList.remove('hidden');
+            document.querySelectorAll('nav button').forEach(btn => {
+                btn.classList.remove('nav-active', 'text-white');
+                btn.classList.add('text-slate-500');
             });
-            document.getElementById(`btn-${tab}`).classList.remove('bg-[#121421]', 'text-slate-500');
-            document.getElementById(`btn-${tab}`).classList.add('bg-indigo-600', 'text-white');
-
-            // Section Toggle
-            if (tab === 'register') {
-                document.getElementById('section-list').classList.add('hidden');
-                document.getElementById('section-register').classList.remove('hidden');
-            } else {
-                document.getElementById('section-list').classList.remove('hidden');
-                document.getElementById('section-register').classList.add('hidden');
-                renderList();
-            }
+            document.getElementById(`nav-${sheet}`).classList.add('nav-active', 'text-white');
+            if (sheet === 'active') renderActive();
+            if (sheet === 'queue') renderQueue();
         }
 
-        function renderList() {
-            const container1 = document.getElementById('list-container-1');
-            const container2 = document.getElementById('list-container-2');
-            container1.innerHTML = "";
-            container2.innerHTML = "";
-
-            const filteredPlayers = players.filter(p => {
-                if (currentTab === 'board') return p.status === 'completed';
-                if (currentTab === 'queue') return p.status === 'waiting';
-                return true;
-            });
-
-            filteredPlayers.forEach((p, index) => {
-                const card = `
-                    <div class="glass-card p-5 rounded-3xl flex justify-between items-center group hover:bg-[#1a1c2e] transition-all border border-slate-800/50">
-                        <div class="flex items-center gap-4">
-                            <span class="text-[10px] font-black text-slate-700 w-4">#${index + 1}</span>
-                            <div>
-                                <div class="flex items-center gap-2">
-                                    <h3 class="font-black text-white text-sm uppercase tracking-wide">${p.name}</h3>
-                                    <span class="text-[9px] font-black bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded uppercase">${p.top}</span>
-                                </div>
-                                <div class="flex items-center gap-2 mt-1">
-                                    <span class="text-[9px] font-black text-slate-500 uppercase">${p.type}</span>
-                                    <span class="text-slate-700 text-[10px]">•</span>
-                                    <span class="text-[9px] font-black ${p.status === 'completed' ? 'text-emerald-500' : 'text-blue-500'} uppercase">
-                                        ${p.status === 'completed' ? '✓ Đã Đạt' : '⏳ Dự kiến: ' + calculateExpectedDate(p)}
-                                    </span>
-                                </div>
-                            </div>
+        function renderActive() {
+            const container = document.getElementById('sheet-active');
+            container.innerHTML = "";
+            TYPES.forEach(type => {
+                let html = `
+                    <div class="glass-card p-5 rounded-[28px] border border-white/5 space-y-4">
+                        <div class="flex justify-between items-center border-b border-white/5 pb-3">
+                            <span class="text-xs font-black text-indigo-400 uppercase tracking-widest">${type}</span>
                         </div>
-                        <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                            <button onclick="toggleStatus(${p.id})" class="p-2 bg-emerald-500/10 text-emerald-500 rounded-xl hover:bg-emerald-500/20">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-                            </button>
-                            <button onclick="deletePlayer(${p.id})" class="p-2 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500/20">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                            </button>
-                        </div>
-                    </div>
-                `;
-                if (index % 2 === 0) container1.innerHTML += card;
-                else container2.innerHTML += card;
+                        <div class="space-y-2">`;
+
+                [1, 2, 3].forEach(rank => {
+                    const topStr = `Top ${rank}`;
+                    const p = players.find(x => x.type === type && x.top === topStr && x.status === 'active');
+                    if (p) {
+                        html += `
+                            <div class="p-4 bg-white/5 rounded-2xl flex justify-between items-center group">
+                                <div>
+                                    <div class="text-[9px] font-black text-indigo-400 uppercase mb-0.5">HẠNG ${rank}</div>
+                                    <div class="text-sm font-black text-white uppercase italic">${p.name}</div>
+                                </div>
+                                <button onclick="finish(${p.id})" class="p-2.5 bg-emerald-500/10 text-emerald-500 rounded-xl hover:bg-emerald-500 hover:text-white transition-all">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>
+                                </button>
+                            </div>`;
+                    } else {
+                        html += `
+                            <div class="p-4 empty-slot rounded-2xl flex justify-between items-center">
+                                <div>
+                                    <div class="text-[9px] font-black text-slate-700 uppercase mb-0.5">HẠNG ${rank}</div>
+                                    <div class="text-sm font-black text-slate-800 uppercase italic">CÒN TRỐNG</div>
+                                </div>
+                                <button onclick="quickReg('${type}', ${rank})" class="text-[9px] font-black bg-slate-900 text-slate-400 px-3 py-2 rounded-lg hover:bg-indigo-600 hover:text-white transition-all uppercase">Đăng ký</button>
+                            </div>`;
+                    }
+                });
+                container.innerHTML += html + `</div></div>`;
             });
-
-            if (filteredPlayers.length === 0) {
-                const empty = `<div class="p-10 text-center border-2 border-dashed border-slate-800 rounded-[32px] opacity-30">
-                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Chưa có dữ liệu</p>
-                </div>`;
-                container1.innerHTML = empty;
-                container2.innerHTML = empty;
-            }
         }
 
-        function calculateExpectedDate(player) {
-            // Giả lập logic tính ngày: Cứ mỗi người cùng loại hình sẽ cách nhau 17 ngày (1 chu kỳ)
-            const sameTypeQueue = players.filter(p => p.type === player.type && p.status === 'waiting');
-            const pos = sameTypeQueue.findIndex(p => p.id === player.id);
-            const date = new Date();
-            date.setDate(date.getDate() + (pos * 17) + 3);
-            return date.toLocaleDateString('vi-VN', {day: '2-digit', month: '2-digit'});
+        function renderQueue() {
+            const container = document.getElementById('sheet-queue');
+            container.innerHTML = "";
+            TYPES.forEach(type => {
+                // Sắp xếp hàng chờ: Người không nhường lên trước, người nhường xuống sau
+                const qList = players.filter(p => p.type === type && p.status === 'waiting')
+                    .sort((a, b) => {
+                        if (a.isPostponed !== b.isPostponed) return a.isPostponed ? 1 : -1;
+                        return a.timestamp - b.timestamp;
+                    });
+
+                if (qList.length > 0) {
+                    let html = `
+                        <div class="space-y-4">
+                            <div class="flex items-center gap-4"><h3 class="text-xs font-black uppercase text-indigo-400 min-w-fit">${type}</h3><div class="h-px w-full bg-white/5"></div></div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">`;
+
+                    qList.forEach((p, idx) => {
+                        const date = new Date();
+                        date.setDate(date.getDate() + (idx + 1) * 17);
+                        const dateStr = date.toLocaleDateString('vi-VN');
+
+                        html += `
+                            <div class="glass-card p-4 rounded-2xl flex justify-between items-center group ${p.isPostponed ? 'is-postponed opacity-60' : ''}">
+                                <div class="flex items-center gap-4">
+                                    <div class="text-xs font-black ${p.isPostponed ? 'text-amber-500' : 'text-slate-600'}">${idx + 1}</div>
+                                    <div>
+                                        <div class="text-sm font-black text-white uppercase flex items-center gap-2">
+                                            ${p.name}
+                                            ${p.isPostponed ? '<span class="text-[8px] px-1.5 py-0.5 bg-amber-500/20 text-amber-500 rounded">ĐANG NHƯỜNG</span>' : ''}
+                                        </div>
+                                        <div class="text-[9px] font-bold text-slate-500 uppercase mt-1">${p.top} • Dự kiến: ${dateStr}</div>
+                                    </div>
+                                </div>
+                                <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    ${p.isPostponed 
+                                        ? `<button onclick="togglePostpone(${p.id}, false)" title="Hủy nhường" class="p-2 bg-amber-500/20 text-amber-500 rounded-lg hover:bg-amber-500 hover:text-white transition-all"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>`
+                                        : `<button onclick="togglePostpone(${p.id}, true)" title="Nhường lượt" class="p-2 bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500 hover:text-white transition-all"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="m7 13 5 5 5-5M7 6l5 5 5-5"/></svg></button>`
+                                    }
+                                    <button onclick="moveToActive(${p.id})" title="Lên bảng chính" class="p-2 bg-indigo-500/10 text-indigo-500 rounded-lg hover:bg-indigo-500 hover:text-white transition-all"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+                                    <button onclick="remove(${p.id})" class="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+                                </div>
+                            </div>`;
+                    });
+                    container.innerHTML += html + `</div></div>`;
+                }
+            });
+            if (!container.innerHTML) container.innerHTML = `<div class="py-20 text-center text-slate-700 text-[10px] font-black uppercase tracking-widest">Hàng chờ hiện đang trống</div>`;
         }
 
-        function toggleStatus(id) {
-            const p = players.find(p => p.id === id);
-            if (p) {
-                p.status = p.status === 'completed' ? 'waiting' : 'completed';
-                saveAndRefresh();
-            }
+        function quickReg(type, rank) {
+            document.getElementById('reg-type').value = type;
+            document.getElementById('reg-top').value = `Top ${rank}`;
+            switchSheet('register');
         }
 
-        function deletePlayer(id) {
-            if (confirm("Xóa thành viên này?")) {
-                players = players.filter(p => p.id !== id);
-                saveAndRefresh();
-            }
-        }
-
-        function saveAndRefresh() {
-            localStorage.setItem('lumos_race_players', JSON.stringify(players));
-            renderList();
-            showToast();
-        }
-
-        function showToast() {
-            const t = document.getElementById('toast');
-            t.classList.remove('opacity-0', 'translate-y-10');
-            setTimeout(() => t.classList.add('opacity-0', 'translate-y-10'), 2000);
-        }
-
-        // --- FORM HANDLING ---
         document.getElementById('reg-form').onsubmit = (e) => {
             e.preventDefault();
-            const name = document.getElementById('reg-name').value;
+            const name = document.getElementById('reg-name').value.toUpperCase();
             const type = document.getElementById('reg-type').value;
             const top = document.getElementById('reg-top').value;
-
-            const newPlayer = {
-                id: Date.now(),
-                name: name.toUpperCase(),
-                type: type,
-                top: top,
-                status: 'waiting',
-                date: new Date().toISOString()
-            };
-
-            players.push(newPlayer);
-            saveAndRefresh();
+            const isBusy = players.find(x => x.type === type && x.top === top && x.status === 'active');
+            players.push({ id: Date.now(), name, type, top, status: isBusy ? 'waiting' : 'active', isPostponed: false, timestamp: Date.now() });
+            save("Đã đăng ký!");
             document.getElementById('reg-form').reset();
-            switchTab('queue');
+            switchSheet(isBusy ? 'queue' : 'active');
         };
 
-        // Khởi tạo ban đầu
-        window.onload = () => {
-            renderList();
-        };
+        function togglePostpone(id, state) {
+            const p = players.find(x => x.id === id);
+            if (p) {
+                p.isPostponed = state;
+                save(state ? "Đã nhường lượt cho người khác" : "Đã hủy nhường lượt");
+            }
+        }
+
+        function finish(id) {
+            const p = players.find(x => x.id === id);
+            const type = p.type;
+            const top = p.top;
+            players = players.filter(x => x.id !== id);
+            
+            // Tìm người kế tiếp trong hàng chờ (không nhường) cho vị trí này
+            const next = players.filter(x => x.type === type && x.top === top && x.status === 'waiting' && !x.isPostponed)
+                .sort((a,b) => a.timestamp - b.timestamp)[0];
+            
+            if (next) next.status = 'active';
+            save("Xác nhận hoàn thành bảng!");
+        }
+
+        function moveToActive(id) {
+            const p = players.find(x => x.id === id);
+            const busy = players.find(x => x.type === p.type && x.top === p.top && x.status === 'active');
+            if (busy) return showToast("Vị trí này đang có người đua!");
+            p.status = 'active';
+            p.isPostponed = false;
+            save("Đã đưa lên bảng chính");
+            switchSheet('active');
+        }
+
+        function remove(id) { players = players.filter(p => p.id !== id); save("Đã xóa khỏi danh sách"); }
+
+        function save(msg) {
+            localStorage.setItem('lumos_pro_data', JSON.stringify(players));
+            renderActive();
+            renderQueue();
+            showToast(msg);
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.classList.replace('opacity-0', 'opacity-100');
+            setTimeout(() => t.classList.replace('opacity-100', 'opacity-0'), 2000);
+        }
+
+        window.onload = renderActive;
     </script>
 </body>
 </html>
