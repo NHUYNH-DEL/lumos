@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lumos Race - Local Version</title>
+    <title>Lumos Race - Data Saved</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -12,6 +12,7 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #020617; color: #e2e8f0; }
         .glass-card { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(10px); border: 1px solid rgba(51, 65, 85, 0.5); }
+        .success-glow { box-shadow: 0 0 15px rgba(16, 185, 129, 0.2); }
     </style>
 </head>
 <body>
@@ -30,6 +31,7 @@
                 trash: <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />,
                 check: <polyline points="20 6 9 17 4 12" />,
                 search: <circle cx="11" cy="11" r="8"></circle>,
+                save: <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" />,
             };
             return (
                 <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -46,23 +48,31 @@
             { id: 5, title: "Thể Lực + Tư Chất + Cầu Nguyện", duration: 4 },
         ];
 
-        const START_DATE = new Date(2026, 2, 23); // 23/03/2026
+        const START_DATE = new Date(2026, 2, 23); 
         const TOTAL_CYCLE_DAYS = RACE_SCHEDULE.reduce((a, b) => a + b.duration, 0);
 
         function App() {
-            const [players, setPlayers] = useState([]);
+            // Khởi tạo state từ localStorage nếu có
+            const [players, setPlayers] = useState(() => {
+                const saved = localStorage.getItem('lumos_race_players');
+                return saved ? JSON.parse(saved) : [];
+            });
+            
             const [view, setView] = useState('board');
             const [searchTerm, setSearchTerm] = useState("");
-            
-            // Form state
             const [regName, setRegName] = useState("");
             const [regCategory, setRegCategory] = useState("Thân Mật");
             const [regTop, setRegTop] = useState("Top 1");
 
+            // Mỗi khi players thay đổi, tự động lưu vào localStorage
+            useEffect(() => {
+                localStorage.setItem('lumos_race_players', JSON.stringify(players));
+            }, [players]);
+
             const currentRace = useMemo(() => {
                 const now = new Date();
                 const diffDays = Math.floor((now - START_DATE) / (1000 * 60 * 60 * 24));
-                const dayInCycle = diffDays % TOTAL_CYCLE_DAYS;
+                const dayInCycle = ((diffDays % TOTAL_CYCLE_DAYS) + TOTAL_CYCLE_DAYS) % TOTAL_CYCLE_DAYS;
                 let acc = 0;
                 for (const race of RACE_SCHEDULE) {
                     if (dayInCycle >= acc && dayInCycle < acc + race.duration) {
@@ -84,35 +94,42 @@
                     status: 'active',
                     date: new Date().toLocaleDateString('vi-VN')
                 };
-                setPlayers([...players, newPlayer]);
+                setPlayers(prev => [...prev, newPlayer]);
                 setRegName("");
                 setView('queue');
             };
 
             const markDone = (id) => {
-                setPlayers(players.map(p => p.id === id ? { ...p, status: 'done' } : p));
+                setPlayers(prev => prev.map(p => p.id === id ? { ...p, status: 'done' } : p));
             };
 
             const remove = (id) => {
-                setPlayers(players.filter(p => p.id !== id));
+                if(confirm("Bạn có chắc chắn muốn xóa thành viên này?")) {
+                    setPlayers(prev => prev.filter(p => p.id !== id));
+                }
             };
 
             return (
                 <div className="max-w-xl mx-auto p-4 md:p-6 min-h-screen">
-                    {/* Header */}
                     <header className="mb-8">
-                        <div className="flex items-center gap-2 mb-1">
-                            <Icon name="zap" color="#facc15" />
-                            <h1 className="text-3xl font-black italic tracking-tighter">LUMOS RACE</h1>
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <Icon name="zap" color="#facc15" />
+                                    <h1 className="text-3xl font-black italic tracking-tighter">LUMOS RACE</h1>
+                                </div>
+                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-500 uppercase tracking-widest">
+                                    <Icon name="save" size={10} /> ĐÃ KÍCH HOẠT LƯU TRỮ TỰ ĐỘNG
+                                </div>
+                            </div>
                         </div>
-                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Local Mode • Không lưu trữ đám mây</p>
                         
                         <div className="mt-6 flex bg-slate-900 p-1 rounded-xl border border-slate-800">
                             {['board', 'queue', 'reg'].map(v => (
                                 <button 
                                     key={v}
                                     onClick={() => setView(v)}
-                                    className={`flex-1 py-2 text-[11px] font-bold uppercase rounded-lg transition-all ${view === v ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                                    className={`flex-1 py-2.5 text-[11px] font-bold uppercase rounded-lg transition-all ${view === v ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
                                 >
                                     {v === 'board' ? 'Bảng Vàng' : v === 'queue' ? 'Hàng Chờ' : 'Ghi Danh'}
                                 </button>
@@ -120,88 +137,108 @@
                         </div>
                     </header>
 
-                    {/* Current Race Banner */}
                     <div className="mb-6 bg-gradient-to-br from-indigo-900/40 to-slate-900 p-5 rounded-2xl border border-indigo-500/30">
                         <div className="flex justify-between items-end">
                             <div>
-                                <p className="text-[10px] font-bold text-indigo-400 mb-1">CHẶNG ĐUA HIỆN TẠI</p>
+                                <p className="text-[10px] font-bold text-indigo-400 mb-1 uppercase tracking-tighter">Chặng đua hiện tại</p>
                                 <h2 className="text-xl font-bold leading-tight">{currentRace.title}</h2>
                             </div>
                             <div className="text-right">
-                                <p className="text-[10px] font-bold text-slate-500">CÒN LẠI</p>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Còn lại</p>
                                 <p className="text-lg font-black text-white">{currentRace.remaining} NGÀY</p>
                             </div>
                         </div>
                     </div>
 
-                    {/* Views */}
                     {view === 'reg' && (
-                        <div className="glass-card p-6 rounded-2xl animate-in fade-in duration-300">
-                            <h3 className="font-bold mb-4 flex items-center gap-2"><Icon name="plus" size={16}/> Đăng ký mục tiêu</h3>
+                        <div className="glass-card p-6 rounded-2xl animate-in slide-in-from-bottom-2 duration-300">
+                            <h3 className="font-bold mb-4 flex items-center gap-2"><Icon name="plus" size={16}/> Ghi danh mới</h3>
                             <form onSubmit={handleAdd} className="space-y-4">
-                                <input 
-                                    placeholder="TÊN NHÂN VẬT..." 
-                                    className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl focus:border-indigo-500 outline-none uppercase font-bold text-sm"
-                                    value={regName}
-                                    onChange={e => setRegName(e.target.value)}
-                                />
-                                <div className="grid grid-cols-2 gap-3">
-                                    <select className="bg-slate-950 border border-slate-800 p-3 rounded-xl text-sm" value={regCategory} onChange={e => setRegCategory(e.target.value)}>
-                                        {["Thân Mật", "Hẹn Hò", "Khí", "Tư Chất", "Bạc", "Dược", "Thể Lực", "Mèo", "Cây"].map(c => <option key={c}>{c}</option>)}
-                                    </select>
-                                    <select className="bg-slate-950 border border-slate-800 p-3 rounded-xl text-sm" value={regTop} onChange={e => setRegTop(e.target.value)}>
-                                        {["Top 1", "Top 2", "Top 3", "Top 5", "Top 10", "Top 20"].map(t => <option key={t}>{t}</option>)}
-                                    </select>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 mb-1 block">Tên nhân vật</label>
+                                    <input 
+                                        placeholder="NHẬP TÊN..." 
+                                        className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl focus:border-indigo-500 outline-none uppercase font-bold text-sm"
+                                        value={regName}
+                                        onChange={e => setRegName(e.target.value)}
+                                        required
+                                    />
                                 </div>
-                                <button className="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-xl font-bold text-sm shadow-xl transition-all">XÁC NHẬN GHI DANH</button>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 mb-1 block">Hạng mục</label>
+                                        <select className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-sm font-semibold" value={regCategory} onChange={e => setRegCategory(e.target.value)}>
+                                            {["Thân Mật", "Hẹn Hò", "Khí", "Tư Chất", "Bạc", "Dược", "Thể Lực", "Mèo", "Cây"].map(c => <option key={c}>{c}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 mb-1 block">Mục tiêu</label>
+                                        <select className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-sm font-semibold" value={regTop} onChange={e => setRegTop(e.target.value)}>
+                                            {["Top 1", "Top 2", "Top 3", "Top 5", "Top 10", "Top 20"].map(t => <option key={t}>{t}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                                <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-500 py-3.5 rounded-xl font-bold text-sm shadow-xl transition-all mt-2 active:scale-95">
+                                    HOÀN TẤT GHI DANH
+                                </button>
                             </form>
                         </div>
                     )}
 
                     {view === 'queue' && (
                         <div className="space-y-3">
-                            <h3 className="font-bold text-slate-400 text-xs uppercase flex items-center gap-2 px-1"><Icon name="users" size={14}/> Đang chuẩn bị ({players.filter(p => p.status === 'active').length})</h3>
-                            {players.filter(p => p.status === 'active').map(p => (
-                                <div key={p.id} className="glass-card p-4 rounded-2xl flex justify-between items-center group">
-                                    <div>
-                                        <div className="font-black text-indigo-300 italic">{p.name}</div>
-                                        <div className="text-[10px] text-slate-500 font-bold uppercase">{p.category} • <span className="text-slate-300">{p.top}</span></div>
+                            <div className="flex justify-between items-center px-1">
+                                <h3 className="font-bold text-slate-400 text-[10px] uppercase flex items-center gap-2 tracking-widest"><Icon name="users" size={12}/> Danh sách chờ ({players.filter(p => p.status === 'active').length})</h3>
+                            </div>
+                            {players.filter(p => p.status === 'active').length === 0 ? (
+                                <div className="text-center py-12 text-slate-600 text-sm italic">Chưa có ai trong danh sách chờ...</div>
+                            ) : (
+                                players.filter(p => p.status === 'active').map(p => (
+                                    <div key={p.id} className="glass-card p-4 rounded-2xl flex justify-between items-center animate-in fade-in">
+                                        <div>
+                                            <div className="font-black text-indigo-300 italic tracking-tight text-lg">{p.name}</div>
+                                            <div className="text-[10px] text-slate-500 font-bold uppercase">{p.category} • <span className="text-slate-300">{p.top}</span></div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => markDone(p.id)} title="Đã đạt" className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl hover:bg-emerald-500 hover:text-white transition-all"><Icon name="check" size={18}/></button>
+                                            <button onClick={() => remove(p.id)} title="Xóa" className="p-3 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"><Icon name="trash" size={18}/></button>
+                                        </div>
                                     </div>
-                                    <div className="flex gap-2">
-                                        <button onClick={() => markDone(p.id)} className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500 hover:text-white transition-all"><Icon name="check" size={16}/></button>
-                                        <button onClick={() => remove(p.id)} className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"><Icon name="trash" size={16}/></button>
-                                    </div>
-                                </div>
-                            ))}
+                                ))
+                            )}
                         </div>
                     )}
 
                     {view === 'board' && (
                         <div className="space-y-3">
                             <div className="flex justify-between items-center px-1">
-                                <h3 className="font-bold text-slate-400 text-xs uppercase flex items-center gap-2"><Icon name="trophy" size={14} color="#fbbf24"/> Bảng vinh danh</h3>
+                                <h3 className="font-bold text-slate-400 text-[10px] uppercase flex items-center gap-2 tracking-widest"><Icon name="trophy" size={12} color="#fbbf24"/> Bảng vinh danh ({players.filter(p => p.status === 'done').length})</h3>
                                 <div className="relative">
-                                    <div className="absolute left-2 top-1/2 -translate-y-1/2 opacity-30"><Icon name="search" size={12}/></div>
+                                    <div className="absolute left-2.5 top-1/2 -translate-y-1/2 opacity-30"><Icon name="search" size={12}/></div>
                                     <input 
                                         placeholder="Tìm tên..." 
-                                        className="bg-slate-900 border border-slate-800 text-[10px] py-1 pl-7 pr-3 rounded-full outline-none focus:border-indigo-500"
+                                        className="bg-slate-900 border border-slate-800 text-[10px] py-1.5 pl-8 pr-3 rounded-full outline-none focus:border-indigo-500 w-32 md:w-40"
                                         onChange={e => setSearchTerm(e.target.value.toUpperCase())}
                                     />
                                 </div>
                             </div>
                             <div className="grid gap-2">
-                                {players.filter(p => p.status === 'done' && p.name.includes(searchTerm)).map(p => (
-                                    <div key={p.id} className="bg-slate-900/40 p-4 rounded-xl border border-emerald-500/20 flex justify-between items-center">
-                                        <div>
-                                            <div className="font-bold text-white">{p.name}</div>
-                                            <div className="text-[10px] text-slate-500 uppercase font-medium">{p.category} • {p.top}</div>
+                                {players.filter(p => p.status === 'done' && p.name.includes(searchTerm)).length === 0 ? (
+                                    <div className="text-center py-12 text-slate-600 text-sm italic">Chưa tìm thấy kết quả...</div>
+                                ) : (
+                                    players.filter(p => p.status === 'done' && p.name.includes(searchTerm)).reverse().map(p => (
+                                        <div key={p.id} className="bg-slate-900/40 p-4 rounded-xl border border-emerald-500/20 flex justify-between items-center success-glow animate-in slide-in-from-top-1">
+                                            <div>
+                                                <div className="font-bold text-white text-lg">{p.name}</div>
+                                                <div className="text-[10px] text-slate-500 uppercase font-black">{p.category} • {p.top}</div>
+                                            </div>
+                                            <div className="text-right italic">
+                                                <div className="text-[10px] font-black text-emerald-500 tracking-tighter">ACHIEVED</div>
+                                                <div className="text-[9px] text-slate-600 font-bold">{p.date}</div>
+                                            </div>
                                         </div>
-                                        <div className="text-right italic">
-                                            <div className="text-[10px] font-black text-emerald-500 tracking-tighter">SUCCESS</div>
-                                            <div className="text-[9px] text-slate-700 font-bold">{p.date}</div>
-                                        </div>
-                                    </div>
-                                ))}
+                                    ))
+                                )}
                             </div>
                         </div>
                     )}
