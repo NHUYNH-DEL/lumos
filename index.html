@@ -1,321 +1,418 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lumos Race Ultra Edition</title>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            background: radial-gradient(circle at top right, #1e1b4b, #020617);
-            color: #f8fafc;
-            min-height: 100vh;
-        }
-        .glass {
-            background: rgba(15, 23, 42, 0.7);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .neo-shadow {
-            box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
-        }
-        .tab-active {
-            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
-        }
-        .status-dot {
-            box-shadow: 0 0 8px currentColor;
-        }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
-    </style>
-</head>
-<body>
-    <div id="root"></div>
+import React, { useState, useEffect, useMemo } from 'react';
+import { initializeApp } from 'firebase/app';
+import { 
+  getFirestore, 
+  collection, 
+  doc, 
+  onSnapshot, 
+  deleteDoc, 
+  updateDoc, 
+  addDoc, 
+  query 
+} from 'firebase/firestore';
+import { 
+  getAuth, 
+  signInAnonymously, 
+  signInWithCustomToken, 
+  onAuthStateChanged 
+} from 'firebase/auth';
+import { 
+  Trophy, 
+  Zap, 
+  Trash2, 
+  Search, 
+  ArrowUpCircle, 
+  History, 
+  Calendar, 
+  UserPlus, 
+  Clock,
+  CheckCircle2,
+  XCircle
+} from 'lucide-react';
 
-    <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+// --- Cấu hình Firebase ---
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'lumos-race-app';
 
-        // --- HỆ THỐNG ICON SVG TÙY CHỈNH ---
-        const Icons = {
-            Flame: () => (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
-                </svg>
-            ),
-            Plus: () => (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>
-                </svg>
-            ),
-            User: () => (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>
-                </svg>
-            ),
-            Trophy: () => (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
-                </svg>
-            ),
-            Trash: () => (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-                </svg>
-            )
+// --- Cấu hình Lịch Đua ---
+const RACE_SCHEDULE = [
+  { id: 1, title: "Thân Mật + Hẹn Hò + Khí", duration: 3, categories: ["Thân Mật", "Hẹn Hò", "Khí"] },
+  { id: 2, title: "Tư Chất + Bạc + Dược", duration: 3, categories: ["Tư Chất", "Bạc", "Dược"] },
+  { id: 3, title: "Thể Lực + Mèo + Cây", duration: 3, categories: ["Thể Lực", "Mèo", "Cây"] },
+  { id: 4, title: "Luân Chiến + Thân Mật + Hoa + Khí", duration: 4, categories: ["Luân Chiến", "Thân Mật", "Hoa", "Khí"] },
+  { id: 5, title: "Thể Lực + Tư Chất + Cầu Nguyện", duration: 4, categories: ["Thể Lực", "Tư Chất", "Cầu Nguyện"] },
+];
+
+const START_DATE = new Date(2026, 2, 23); // Ngày bắt đầu chu kỳ: 23/03/2026
+const TOTAL_CYCLE_DAYS = RACE_SCHEDULE.reduce((a, b) => a + b.duration, 0);
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [players, setPlayers] = useState([]);
+  const [view, setView] = useState('board'); // 'board', 'queue', 'reg'
+  const [searchTerm, setSearchTerm] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  // Form State
+  const [regName, setRegName] = useState("");
+  const [regCategory, setRegCategory] = useState("Thân Mật");
+  const [regTop, setRegTop] = useState("Top 1");
+
+  // 1. Khởi tạo Auth
+  useEffect(() => {
+    const initAuth = async () => {
+      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+        await signInWithCustomToken(auth, __initial_auth_token);
+      } else {
+        await signInAnonymously(auth);
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
+    return () => unsubscribe();
+  }, []);
+
+  // 2. Lấy dữ liệu Realtime từ Cloud
+  useEffect(() => {
+    if (!user) return;
+    const q = collection(db, 'artifacts', appId, 'public', 'data', 'players');
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const playerList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setPlayers(playerList);
+      setLoading(false);
+    }, (error) => {
+      console.error("Firestore error:", error);
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, [user]);
+
+  // 3. Tính toán Chặng Đua Hiện Tại
+  const currentRace = useMemo(() => {
+    const now = new Date();
+    const diffMs = now - START_DATE;
+    const diffDaysFull = diffMs / (1000 * 60 * 60 * 24);
+    const dayInCycle = ((Math.floor(diffDaysFull) % TOTAL_CYCLE_DAYS) + TOTAL_CYCLE_DAYS) % TOTAL_CYCLE_DAYS;
+
+    let acc = 0;
+    for (let race of RACE_SCHEDULE) {
+      if (dayInCycle >= acc && dayInCycle < acc + race.duration) {
+        return { 
+          ...race, 
+          remaining: Math.ceil(race.duration - (dayInCycle - acc)),
+          isCurrent: true 
         };
+      }
+      acc += race.duration;
+    }
+    return RACE_SCHEDULE[0];
+  }, []);
 
-        const RACE_SCHEDULE = [
-            { id: 1, title: "Thân Mật + Hẹn Hò + Khí", duration: 3 },
-            { id: 2, title: "Tư Chất + Bạc + Dược", duration: 3 },
-            { id: 3, title: "Thể Lực + Mèo + Cây", duration: 3 },
-            { id: 4, title: "Luân Chiến + Thân Mật + Hoa + Khí", duration: 4 },
-            { id: 5, title: "Thể Lực + Tư Chất + Cầu Nguyện", duration: 4 },
-        ];
+  // 4. Logic tính ngày dự kiến lượt đua (Logic thông minh)
+  const getExpectedDate = (category, playerTop, regDate) => {
+    const now = new Date();
+    const diffMs = now - START_DATE;
+    const currentCycleCount = Math.floor(diffMs / (1000 * 60 * 60 * 24 * TOTAL_CYCLE_DAYS));
+    
+    // Tìm index chặng có category này
+    const raceIndex = RACE_SCHEDULE.findIndex(r => r.categories.includes(category));
+    if (raceIndex === -1) return "N/A";
 
-        const START_DATE = new Date(2026, 2, 23); // Ngày 23/3/2026
-        const APP_ID = "lumos_race_v2_storage";
+    let startDayInCycle = 0;
+    for (let i = 0; i < raceIndex; i++) startDayInCycle += RACE_SCHEDULE[i].duration;
 
-        function App() {
-            // Khởi tạo state an toàn từ localStorage
-            const [players, setPlayers] = useState(() => {
-                const saved = localStorage.getItem(APP_ID);
-                return saved ? JSON.parse(saved) : [];
-            });
-            const [view, setView] = useState('board');
-            const [formData, setFormData] = useState({ name: '', category: 'Thân Mật', top: 'Top 1' });
-            const [search, setSearch] = useState("");
+    // Hàng chờ theo Category + Top
+    const queue = players
+      .filter(p => p.category === category && p.top === playerTop && p.status !== 'Đã đạt')
+      .sort((a, b) => a.regDate - b.regDate);
+    
+    const rank = queue.findIndex(p => p.regDate === regDate);
+    if (rank === -1) return "Đang tính...";
 
-            // Đồng bộ dữ liệu mỗi khi players thay đổi
-            useEffect(() => {
-                localStorage.setItem(APP_ID, JSON.stringify(players));
-            }, [players]);
+    const cyclesNeeded = rank; // Mỗi chu kỳ chỉ giải quyết 1 người cho mỗi cặp (Category, Top)
+    const totalDaysFromStart = (currentCycleCount + cyclesNeeded) * TOTAL_CYCLE_DAYS + startDayInCycle;
+    
+    const date = new Date(START_DATE.getTime());
+    date.setDate(date.getDate() + totalDaysFromStart);
+    
+    return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+  };
 
-            const raceInfo = useMemo(() => {
-                const now = new Date();
-                const totalDuration = RACE_SCHEDULE.reduce((a, b) => a + b.duration, 0);
-                const diffDays = Math.floor((now - START_DATE) / (1000 * 60 * 60 * 24));
-                const currentDay = ((diffDays % totalDuration) + totalDuration) % totalDuration;
+  // --- Thao tác dữ liệu ---
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    if (!regName.trim() || !user) return;
 
-                let acc = 0;
-                for (let race of RACE_SCHEDULE) {
-                    if (currentDay >= acc && currentDay < acc + race.duration) {
-                        return { ...race, daysLeft: race.duration - (currentDay - acc) };
-                    }
-                    acc += race.duration;
-                }
-                return RACE_SCHEDULE[0];
-            }, []);
+    const isCurrent = currentRace.categories.includes(regCategory);
+    const newPlayer = {
+      name: regName.toUpperCase().trim(),
+      category: regCategory,
+      top: regTop,
+      status: isCurrent ? 'Đang đua' : 'Chờ lượt',
+      regDate: Date.now(),
+      createdBy: user.uid
+    };
 
-            const handleSubmit = (e) => {
-                e.preventDefault();
-                if (!formData.name.trim()) return;
-                const newPlayer = {
-                    ...formData,
-                    id: Date.now(),
-                    status: 'active',
-                    timestamp: new Date().toLocaleDateString('vi-VN')
-                };
-                setPlayers([newPlayer, ...players]);
-                setFormData({ ...formData, name: '' });
-                setView('queue');
-            };
+    try {
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'players'), newPlayer);
+      setRegName("");
+      setView('queue');
+    } catch (err) {
+      console.error("Lưu thất bại:", err);
+    }
+  };
 
-            const toggleStatus = (id) => {
-                setPlayers(players.map(p => p.id === id ? { ...p, status: p.status === 'active' ? 'done' : 'active' } : p));
-            };
+  const updateStatus = async (id, status) => {
+    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'players', id);
+    await updateDoc(docRef, { 
+      status: status === 'Đã đạt' ? 'Đang đua' : 'Đã đạt',
+      finishDate: status !== 'Đã đạt' ? Date.now() : null 
+    });
+  };
 
-            const deletePlayer = (id) => {
-                if (window.confirm("Xóa thành viên này khỏi danh sách?")) {
-                    setPlayers(players.filter(p => p.id !== id));
-                }
-            };
+  const deletePlayer = async (id) => {
+    if (confirm("Xác nhận xóa thành viên này?")) {
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', id));
+    }
+  };
 
-            const filteredPlayers = players.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
+  if (loading) return (
+    <div className="min-h-screen bg-[#0a0b14] flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-slate-400 font-bold text-xs tracking-widest uppercase animate-pulse">Đang kết nối Cloud...</p>
+      </div>
+    </div>
+  );
 
-            return (
-                <div className="max-w-md mx-auto min-h-screen flex flex-col p-5">
-                    {/* Header Section */}
-                    <header className="flex justify-between items-center mb-8">
-                        <div>
-                            <div className="flex items-center gap-2 text-indigo-400 mb-1">
-                                <Icons.Flame />
-                                <span className="text-[10px] font-black uppercase tracking-[0.2em]">Dashboard</span>
-                            </div>
-                            <h1 className="text-2xl font-extrabold tracking-tight text-white">LUMOS <span className="text-indigo-500 italic">RACE</span></h1>
-                        </div>
-                        <div className="text-right">
-                            <div className="text-[10px] text-slate-500 font-bold uppercase mb-1">Chặng Hiện Tại</div>
-                            <div className="bg-indigo-500/10 border border-indigo-500/30 px-3 py-1 rounded-full flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-indigo-500 status-dot"></span>
-                                <span className="text-[11px] font-bold text-indigo-100">{raceInfo.daysLeft} Ngày</span>
-                            </div>
-                        </div>
-                    </header>
+  return (
+    <div className="min-h-screen bg-[#0a0b14] text-slate-200 font-sans pb-20">
+      {/* Header Banner - Giống ảnh mẫu */}
+      <div className="p-6 max-w-5xl mx-auto">
+        <div className="bg-[#121421] rounded-3xl p-8 border border-slate-800/50 flex flex-col md:flex-row justify-between items-center relative overflow-hidden group">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
+          <div className="z-10 text-center md:text-left">
+            <span className="bg-indigo-500/10 text-indigo-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest mb-4 inline-block border border-indigo-500/20">
+              Sự kiện hiện tại
+            </span>
+            <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight uppercase leading-none mt-2">
+              {currentRace.title}
+            </h1>
+          </div>
+          <div className="mt-6 md:mt-0 z-10 flex flex-col items-center md:items-end">
+            <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">Thời gian còn lại</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-5xl font-black text-yellow-400 italic leading-none">{currentRace.remaining}</span>
+              <span className="text-xl font-black text-yellow-400 italic">Ngày</span>
+            </div>
+          </div>
+        </div>
 
-                    {/* Current Race Banner */}
-                    <div className="glass p-5 rounded-3xl mb-8 neo-shadow relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <Icons.Trophy />
-                        </div>
-                        <div className="relative z-10">
-                            <h3 className="text-slate-400 text-xs font-semibold mb-2 flex items-center gap-2 uppercase tracking-wider">
-                                Nội dung đua chặng
-                            </h3>
-                            <p className="text-lg font-bold text-white leading-tight">{raceInfo.title}</p>
-                        </div>
-                    </div>
+        {/* Navigation - Giống ảnh mẫu */}
+        <nav className="flex gap-2 mt-8 mb-8 overflow-x-auto pb-2 scrollbar-hide">
+          <button 
+            onClick={() => setView('board')}
+            className={`flex items-center gap-2 px-6 py-3 rounded-2xl transition-all whitespace-nowrap text-xs font-black uppercase tracking-wider ${
+              view === 'board' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-[#121421] text-slate-500 hover:text-slate-300 border border-slate-800'
+            }`}
+          >
+            <Trophy size={16} /> BẢNG VÀNG
+          </button>
+          <button 
+            onClick={() => setView('queue')}
+            className={`flex items-center gap-2 px-6 py-3 rounded-2xl transition-all whitespace-nowrap text-xs font-black uppercase tracking-wider ${
+              view === 'queue' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-[#121421] text-slate-500 hover:text-slate-300 border border-slate-800'
+            }`}
+          >
+            <History size={16} /> HÀNG CHỜ
+          </button>
+          <button 
+            onClick={() => setView('reg')}
+            className={`flex items-center gap-2 px-6 py-3 rounded-2xl transition-all whitespace-nowrap text-xs font-black uppercase tracking-wider ${
+              view === 'reg' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-[#121421] text-slate-500 hover:text-slate-300 border border-slate-800'
+            }`}
+          >
+            <UserPlus size={16} /> GHI DANH
+          </button>
+        </nav>
 
-                    {/* Navigation Tabs */}
-                    <div className="flex bg-slate-900/50 p-1.5 rounded-2xl mb-6 border border-slate-800/50">
-                        {[
-                            { id: 'board', label: 'BẢNG VÀNG', icon: <Icons.Trophy /> },
-                            { id: 'queue', label: 'HÀNG CHỜ', icon: <Icons.User /> },
-                            { id: 'reg', label: 'GHI DANH', icon: <Icons.Plus /> }
-                        ].map(tab => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setView(tab.id)}
-                                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl transition-all duration-300 ${
-                                    view === tab.id ? 'tab-active text-white' : 'text-slate-500 hover:text-slate-300'
-                                }`}
-                            >
-                                <span className={view === tab.id ? 'scale-90' : 'scale-75 opacity-70'}>{tab.icon}</span>
-                                <span className="text-[10px] font-bold tracking-wider">{tab.label}</span>
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Main Content Area */}
-                    <main className="flex-1 space-y-4">
-                        {view === 'reg' && (
-                            <div className="glass p-6 rounded-3xl animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                <form onSubmit={handleSubmit} className="space-y-6">
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 block">Tên nhân vật</label>
-                                        <input 
-                                            autoFocus
-                                            className="w-full bg-slate-800/50 border-b-2 border-slate-700 p-4 rounded-xl text-white outline-none focus:border-indigo-500 transition-all font-bold placeholder:text-slate-600 uppercase"
-                                            placeholder="NHẬP TÊN..."
-                                            value={formData.name}
-                                            onChange={e => setFormData({...formData, name: e.target.value.toUpperCase()})}
-                                        />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 block">Loại hình</label>
-                                            <select 
-                                                className="w-full bg-slate-800/50 border border-slate-700 p-3 rounded-xl text-sm text-white outline-none focus:border-indigo-500"
-                                                value={formData.category}
-                                                onChange={e => setFormData({...formData, category: e.target.value})}
-                                            >
-                                                {["Thân Mật", "Hẹn Hò", "Khí", "Tư Chất", "Bạc", "Dược", "Thể Lực", "Mèo", "Cây", "Luân Chiến", "Hoa"].map(c => <option key={c} value={c}>{c}</option>)}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 block">Mục tiêu</label>
-                                            <select 
-                                                className="w-full bg-slate-800/50 border border-slate-700 p-3 rounded-xl text-sm text-white outline-none focus:border-indigo-500"
-                                                value={formData.top}
-                                                onChange={e => setFormData({...formData, top: e.target.value})}
-                                            >
-                                                {["Top 1", "Top 2", "Top 3", "Top 5", "Top 10", "Top 20", "Top 50"].map(t => <option key={t} value={t}>{t}</option>)}
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <button className="w-full bg-indigo-600 hover:bg-indigo-500 py-4 rounded-2xl font-black text-xs tracking-[0.2em] text-white shadow-lg active:scale-95 transition-all">
-                                        XÁC NHẬN GHI DANH
-                                    </button>
-                                </form>
-                            </div>
-                        )}
-
-                        {(view === 'board' || view === 'queue') && (
-                            <div className="space-y-3">
-                                <div className="relative group">
-                                    <input 
-                                        placeholder="Tìm kiếm đồng đội..." 
-                                        className="w-full bg-slate-900/50 border border-slate-800/50 py-3 px-5 pl-12 rounded-2xl text-xs outline-none focus:border-indigo-500/50 transition-all text-slate-300"
-                                        onChange={e => setSearch(e.target.value)}
-                                    />
-                                    <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-600">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                                    </div>
-                                </div>
-
-                                {filteredPlayers.filter(p => view === 'board' ? p.status === 'done' : p.status === 'active').length === 0 ? (
-                                    <div className="text-center py-20 bg-slate-900/20 rounded-3xl border border-dashed border-slate-800">
-                                        <p className="text-slate-600 text-xs font-medium italic">Không có dữ liệu hiển thị</p>
-                                    </div>
-                                ) : (
-                                    filteredPlayers
-                                        .filter(p => view === 'board' ? p.status === 'done' : p.status === 'active')
-                                        .map(p => (
-                                            <div key={p.id} className="glass p-4 rounded-2xl flex justify-between items-center group hover:bg-slate-800/40 transition-colors">
-                                                <div className="flex items-center gap-4">
-                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs ${
-                                                        p.status === 'done' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-indigo-500/20 text-indigo-400'
-                                                    }`}>
-                                                        {p.name.charAt(0)}
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="font-extrabold text-sm text-white tracking-wide">{p.name}</h4>
-                                                        <div className="flex gap-2 items-center mt-1">
-                                                            <span className="text-[9px] font-black text-slate-500 uppercase">{p.category}</span>
-                                                            <span className="w-1 h-1 rounded-full bg-slate-700"></span>
-                                                            <span className="text-[9px] font-black text-indigo-400 uppercase">{p.top}</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button 
-                                                        onClick={() => toggleStatus(p.id)}
-                                                        className={`p-2 rounded-lg transition-colors ${
-                                                            p.status === 'active' ? 'bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500/30' : 'bg-indigo-500/20 text-indigo-500 hover:bg-indigo-500/30'
-                                                        }`}
-                                                    >
-                                                        {p.status === 'active' ? 'XONG' : 'KHÔI PHỤC'}
-                                                    </button>
-                                                    <button 
-                                                        onClick={() => deletePlayer(p.id)}
-                                                        className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20"
-                                                    >
-                                                        <Icons.Trash />
-                                                    </button>
-                                                </div>
-                                                {/* Mobile visible indicator */}
-                                                <div className="group-hover:hidden flex items-center gap-2">
-                                                    <div className="text-[8px] font-bold text-slate-600 uppercase text-right leading-tight">
-                                                        {p.timestamp}<br/>RECORDED
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))
-                                )}
-                            </div>
-                        )}
-                    </main>
-
-                    {/* Footer Info */}
-                    <footer className="mt-8 pt-6 border-t border-slate-800 flex justify-between items-center">
-                        <div className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">
-                            LUMOS RACE SYSTEM • v2.0
-                        </div>
-                        <div className="text-[9px] text-slate-600 font-bold uppercase">
-                            Total: {players.length} Players
-                        </div>
-                    </footer>
+        {/* Content Area */}
+        <main className="animate-in fade-in duration-500">
+          {view === 'reg' ? (
+            <div className="max-w-xl mx-auto bg-[#121421] p-10 rounded-[40px] border border-slate-800 shadow-2xl">
+              <div className="text-center mb-10">
+                <div className="w-16 h-16 bg-indigo-500/10 rounded-3xl flex items-center justify-center mx-auto mb-4 border border-indigo-500/20">
+                  <UserPlus className="text-indigo-500" size={32} />
                 </div>
-            );
-        }
+                <h2 className="text-2xl font-black text-white uppercase tracking-tight">Đăng ký đua top</h2>
+                <p className="text-slate-500 text-xs mt-2 font-medium">Thông tin của bạn sẽ được lưu trực tuyến</p>
+              </div>
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+              <form onSubmit={handleRegister} className="space-y-8">
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2">Tên Nhân Vật</label>
+                  <input 
+                    type="text"
+                    required
+                    placeholder="NHẬP TÊN GAME..."
+                    className="w-full bg-[#0a0b14] border-2 border-slate-800 rounded-2xl p-5 text-white font-bold outline-none focus:border-indigo-500 transition-all placeholder:text-slate-700 uppercase"
+                    value={regName}
+                    onChange={(e) => setRegName(e.target.value)}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2">Loại Hình</label>
+                    <select 
+                      className="w-full bg-[#0a0b14] border-2 border-slate-800 rounded-2xl p-5 text-sm text-white font-bold outline-none focus:border-indigo-500 appearance-none"
+                      value={regCategory}
+                      onChange={(e) => setRegCategory(e.target.value)}
+                    >
+                      {["Thân Mật", "Hẹn Hò", "Khí", "Tư Chất", "Bạc", "Dược", "Thể Lực", "Mèo", "Cây", "Luân Chiến", "Hoa"].map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2">Mục Tiêu</label>
+                    <select 
+                      className="w-full bg-[#0a0b14] border-2 border-slate-800 rounded-2xl p-5 text-sm text-white font-bold outline-none focus:border-indigo-500 appearance-none"
+                      value={regTop}
+                      onChange={(e) => setRegTop(e.target.value)}
+                    >
+                      {["Top 1", "Top 2", "Top 3", "Top 5", "Top 10", "Top 20", "Top 50"].map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <button className="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-black py-5 rounded-2xl shadow-xl shadow-indigo-500/20 transition-all active:scale-[0.98] uppercase tracking-[0.15em] text-sm">
+                  Hoàn Tất Ghi Danh
+                </button>
+              </form>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Search Bar */}
+              <div className="relative max-w-md">
+                <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-600" size={18} />
+                <input 
+                  type="text"
+                  placeholder="Tìm kiếm đồng đội..."
+                  className="w-full bg-[#121421] border border-slate-800 rounded-2xl py-4 pl-14 pr-6 text-sm text-white outline-none focus:border-indigo-500 transition-all shadow-lg shadow-black/20"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+
+              {/* Grid Lists - Chia 2 cột như ảnh mẫu */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {["Thân Mật", "Hẹn Hò", "Khí", "Tư Chất", "Bạc", "Dược"].slice(0, 2).map(catTitle => (
+                  <div key={catTitle} className="space-y-4">
+                    <div className="flex items-center gap-3 px-2">
+                      <div className="w-1 h-6 bg-indigo-500 rounded-full"></div>
+                      <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Bảng {catTitle}</h3>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {players
+                        .filter(p => p.category === catTitle)
+                        .filter(p => p.name.includes(searchTerm.toUpperCase()))
+                        .filter(p => view === 'board' ? p.status === 'Đã đạt' : p.status !== 'Đã đạt')
+                        .sort((a, b) => a.regDate - b.regDate)
+                        .map((player, idx) => (
+                          <div key={player.id} className="bg-[#121421] p-5 rounded-3xl border border-slate-800/50 flex justify-between items-center group hover:bg-[#1a1c2e] transition-all hover:-translate-y-1">
+                            <div className="flex items-center gap-5">
+                              <span className="text-[10px] font-black text-slate-700 w-4">#{idx + 1}</span>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h4 className="font-black text-white text-sm tracking-wide uppercase">{player.name}</h4>
+                                  <span className="text-[9px] font-black bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded uppercase">{player.top}</span>
+                                </div>
+                                <div className="flex items-center gap-3 mt-1">
+                                  {view === 'queue' ? (
+                                    <>
+                                      <span className="text-[9px] font-black text-blue-500 uppercase flex items-center gap-1">
+                                        <div className="w-1 h-1 rounded-full bg-blue-500 animate-pulse"></div> Đang đua
+                                      </span>
+                                      <span className="text-slate-600 text-[10px]">•</span>
+                                      <span className="text-[9px] font-black text-slate-500 uppercase">
+                                        Lượt: <span className="text-yellow-500">{getExpectedDate(player.category, player.top, player.regDate)}</span>
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="text-[9px] font-black text-emerald-500 uppercase flex items-center gap-1">
+                                      <CheckCircle2 size={10} /> Đã xong
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              {/* Nút hành động hiển thị khi hover */}
+                              <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
+                                <button 
+                                  onClick={() => updateStatus(player.id, player.status)}
+                                  className={`p-2 rounded-xl transition-all ${
+                                    player.status === 'Đã đạt' 
+                                    ? 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20' 
+                                    : 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
+                                  }`}
+                                  title={player.status === 'Đã đạt' ? "Đưa về chờ" : "Đánh dấu hoàn thành"}
+                                >
+                                  {player.status === 'Đã đạt' ? <Clock size={16} /> : <CheckCircle2 size={16} />}
+                                </button>
+                                <button 
+                                  onClick={() => deletePlayer(player.id)}
+                                  className="p-2 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500/20 transition-all"
+                                  title="Xóa"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                              
+                              {/* Trạng thái mặc định */}
+                              <div className="group-hover:hidden flex items-center justify-center bg-slate-900/50 w-12 h-12 rounded-2xl border border-slate-800">
+                                {player.status === 'Đã đạt' ? <Trophy size={18} className="text-yellow-500" /> : <Zap size={18} className="text-indigo-500" />}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+
+                      {/* Placeholder Trống */}
+                      {players.filter(p => p.category === catTitle && (view === 'board' ? p.status === 'Đã đạt' : p.status !== 'Đã đạt')).length === 0 && (
+                        <div className="bg-[#121421]/30 border-2 border-dashed border-slate-800/50 rounded-3xl p-8 flex flex-col items-center justify-center opacity-40">
+                          <Trophy size={24} className="text-slate-700 mb-2" />
+                          <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Trống</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+
+      {/* Footer Branding */}
+      <footer className="fixed bottom-0 left-0 w-full p-4 border-t border-slate-800 bg-[#0a0b14]/80 backdrop-blur-md z-50">
+        <div className="max-w-5xl mx-auto flex justify-between items-center px-4">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Lumos Cloud Active</span>
+          </div>
+          <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+            {players.length} Users Tracked
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
