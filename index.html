@@ -14,6 +14,8 @@
         .nav-btn { transition: all 0.2s; }
         .active-timer { color: #818cf8; text-shadow: 0 0 15px rgba(129, 140, 248, 0.5); }
         .danger-timer { color: #fb7185; text-shadow: 0 0 15px rgba(251, 113, 133, 0.5); }
+        .loading-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
     </style>
 </head>
 <body class="pb-20">
@@ -39,7 +41,7 @@
             <div class="flex items-center gap-4 bg-black/60 px-5 py-2 rounded-2xl border border-white/10">
                 <div class="flex flex-col items-end pr-4 border-r border-white/10">
                     <span id="stage-status" class="text-[9px] font-black text-indigo-400 uppercase tracking-widest">TRẠNG THÁI</span>
-                    <span id="stage-info" class="text-[11px] font-black text-white italic">ĐANG TẢI...</span>
+                    <span id="stage-info" class="text-[11px] font-black text-white italic">ĐANG KẾT NỐI...</span>
                 </div>
                 <div class="text-center min-w-[140px]">
                     <div id="countdown-label" class="text-[8px] font-bold text-slate-500 uppercase mb-0.5 tracking-tighter">THỜI GIAN CÒN LẠI</div>
@@ -68,7 +70,9 @@
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="grid-current-stage">
-                    <div class="col-span-full py-20 text-center text-slate-600 font-black italic uppercase tracking-widest animate-pulse">Đang kết nối hệ thống dữ liệu...</div>
+                    <div class="col-span-full py-20 text-center text-slate-600 font-black italic uppercase tracking-widest loading-pulse">
+                        Đang đồng bộ dữ liệu chặng đua...
+                    </div>
                 </div>
             </section>
 
@@ -94,7 +98,7 @@
                                 </tr>
                             </thead>
                             <tbody id="waiting-list-body" class="divide-y divide-white/5">
-                                <tr><td colspan="6" class="p-10 text-center text-slate-600 font-black italic uppercase">Đang tải...</td></tr>
+                                <tr><td colspan="6" class="p-10 text-center text-slate-600 font-black italic uppercase">Đang đợi máy chủ...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -151,14 +155,13 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, addDoc, onSnapshot, query, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Config Firebase
-        const firebaseConfig = JSON.parse(__firebase_config);
+        // Cấu hình fallback nếu môi trường thiếu config
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'lumos-race-v11-custom';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'lumos-race-prod';
 
-        // Lịch đua: Chặng 4 ngày, Chặng 2 (Ngày 5-8 của chu kỳ)
         const CYCLE_START_DATE = new Date(2026, 2, 19, 0, 0, 0); 
         const CYCLE_DAYS = 20;
         const STAGES = [
@@ -171,8 +174,8 @@
 
         let players = [];
         let history = [];
+        let isConnected = false;
 
-        // Logic thời gian tùy biến theo yêu cầu
         function getDetailedTimeInfo() {
             const now = new Date();
             const diffTime = now - CYCLE_START_DATE;
@@ -182,10 +185,6 @@
             
             const stage = STAGES.find(s => dayInCycle >= s.startDay && dayInCycle < s.startDay + s.duration) || STAGES[0];
             const dayOfStage = ((dayInCycle - stage.startDay) % stage.duration) + 1;
-
-            // Xác định thời điểm Deadline (22h của mốc thời gian)
-            // Bảng 1&2 (Bạc/Dược): Hết ngày thứ 3 của chặng (2 ngày 22h kể từ lúc bắt đầu)
-            // Bảng 3 (Tư Chất): Hết ngày thứ 4 của chặng (22h kể từ lúc bảng 1&2 xong)
             
             let deadline = new Date(CYCLE_START_DATE);
             deadline.setDate(CYCLE_START_DATE.getDate() + (cycleOffset * CYCLE_DAYS) + (stage.startDay - 1));
@@ -194,23 +193,18 @@
             let infoLabel = "";
 
             if (dayOfStage <= 3) {
-                // Đang trong thời gian Bạc/Dược (hoặc ngày đầu chặng)
-                // Deadline là 22h ngày thứ 3 của chặng
                 deadline.setDate(deadline.getDate() + 2); 
                 deadline.setHours(22, 0, 0, 0);
                 statusLabel = "BẢNG ĐẦU (3-4 BẢNG)";
                 infoLabel = `CHẶNG ${stage.id} • ${stage.items[1]} & ${stage.items[2]}`;
             } else {
-                // Đang trong ngày cuối của chặng (Bảng Tư Chất)
                 deadline.setDate(deadline.getDate() + 3);
                 deadline.setHours(22, 0, 0, 0);
                 statusLabel = "BẢNG CUỐI";
                 infoLabel = `CHẶNG ${stage.id} • ${stage.items[0]}`;
             }
 
-            // Nếu đã qua 22h, kiểm tra xem có phải đang nghỉ không
             if (now > deadline) {
-                // Thời gian nghỉ sau khi kết thúc bảng
                 statusLabel = "NGHỈ NGƠI";
                 infoLabel = "KẾT THÚC BẢNG ĐUA";
             }
@@ -221,45 +215,33 @@
         function updateUI() {
             const { stage, now, deadline, statusLabel, infoLabel } = getDetailedTimeInfo();
             
-            const statusEl = document.getElementById('stage-status');
-            const infoEl = document.getElementById('stage-info');
-            const timerEl = document.getElementById('countdown-timer');
-            const titleEl = document.getElementById('active-stage-title');
-            const statusBar = document.getElementById('status-bar');
-
-            if (statusEl) statusEl.innerText = statusLabel;
-            if (infoEl) infoEl.innerText = infoLabel;
-            if (titleEl) titleEl.innerText = stage.name;
+            document.getElementById('stage-status').innerText = statusLabel;
+            document.getElementById('stage-info').innerText = isConnected ? infoLabel : "ĐANG KẾT NỐI...";
+            document.getElementById('active-stage-title').innerText = stage.name;
 
             let diff = deadline - now;
-            
+            const timerEl = document.getElementById('countdown-timer');
+            const statusBar = document.getElementById('status-bar');
+
             if (diff <= 0) {
-                if (timerEl) {
-                    timerEl.innerText = "00:00:00:00";
-                    timerEl.className = "text-xl font-black italic leading-none font-mono text-slate-600";
-                }
-                if (statusBar) {
-                    statusBar.innerText = "THỜI GIAN ĐUA ĐÃ KẾT THÚC - CHỜ BẢNG TIẾP THEO";
-                    statusBar.className = "py-1.5 px-6 text-center text-[10px] font-black uppercase tracking-[0.25em] text-white/90 bg-slate-800";
-                }
+                timerEl.innerText = "00:00:00:00";
+                timerEl.className = "text-xl font-black italic leading-none font-mono text-slate-600";
+                statusBar.innerText = "KẾT THÚC PHIÊN ĐUA - ĐANG ĐỢI CẬP NHẬT CHẶNG MỚI";
+                statusBar.classList.replace('bg-indigo-600', 'bg-slate-800');
             } else {
                 const days = Math.floor(diff / (1000 * 60 * 60 * 24));
                 const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
                 const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
                 const secs = Math.floor((diff % (1000 * 60)) / 1000);
 
-                if (timerEl) {
-                    timerEl.innerText = `${days.toString().padStart(2, '0')}:${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-                    timerEl.className = diff < (12 * 60 * 60 * 1000) ? "text-xl font-black italic leading-none font-mono danger-timer" : "text-xl font-black italic leading-none font-mono active-timer";
-                }
-                if (statusBar) {
-                    statusBar.innerText = `LUMOS RACE • ${infoLabel} • ĐANG DIỄN RA`;
-                    statusBar.className = "py-1.5 px-6 text-center text-[10px] font-black uppercase tracking-[0.25em] text-white/90 bg-indigo-600";
-                }
+                timerEl.innerText = `${days.toString().padStart(2, '0')}:${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                timerEl.className = diff < (12 * 60 * 60 * 1000) ? "text-xl font-black italic leading-none font-mono danger-timer" : "text-xl font-black italic leading-none font-mono active-timer";
+                
+                statusBar.innerText = isConnected ? `LUMOS RACE • ${infoLabel} • ĐANG DIỄN RA` : "ĐANG ĐỒNG BỘ MÁY CHỦ CLOUD...";
+                if(isConnected) statusBar.classList.replace('bg-slate-800', 'bg-indigo-600');
             }
         }
 
-        // --- Render logic ---
         function renderDashboard() {
             const { stage, cycleOffset } = getDetailedTimeInfo();
             const grid = document.getElementById('grid-current-stage');
@@ -290,14 +272,12 @@
                 grid.appendChild(card);
             });
 
-            // Waiting List
             const tbody = document.getElementById('waiting-list-body');
-            if (!tbody) return;
             tbody.innerHTML = '';
             const sortedPlayers = [...players].sort((a, b) => a.createdAt - b.createdAt);
             
             if (sortedPlayers.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="p-10 text-center text-slate-600 font-black italic uppercase">Chưa có ai ghi danh đua</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="p-10 text-center text-slate-600 font-black italic uppercase">Database đang trống. Hãy ghi danh đua mới!</td></tr>';
             } else {
                 sortedPlayers.forEach((p, i) => {
                     const row = document.createElement('tr');
@@ -321,8 +301,10 @@
 
         function renderHallOfFame() {
             const grid = document.getElementById('hall-of-fame-grid');
-            if (!grid) return;
             grid.innerHTML = '';
+            if(history.length === 0) {
+                grid.innerHTML = '<div class="col-span-full py-20 text-center text-slate-600 font-black italic uppercase">Chưa có ai được vinh danh</div>';
+            }
             history.sort((a, b) => b.timestamp - a.timestamp).forEach(h => {
                 const date = new Date(h.completedAt);
                 const card = document.createElement('div');
@@ -340,7 +322,6 @@
             });
         }
 
-        // --- Database Actions ---
         window.showTab = (tabId) => {
             document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
             document.getElementById(`tab-${tabId}`).classList.remove('hidden');
@@ -412,7 +393,6 @@
             }
         };
 
-        // --- Init ---
         async function init() {
             try {
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -420,24 +400,25 @@
                 } else {
                     await signInAnonymously(auth);
                 }
-            } catch (e) { console.error(e); }
+            } catch (e) { console.error("Auth Error:", e); }
 
             onAuthStateChanged(auth, (user) => {
                 if(user) {
+                    isConnected = true;
                     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registrations'), (s) => {
                         players = s.docs.map(d => ({id: d.id, ...d.data()}));
                         renderDashboard();
-                    });
+                    }, (err) => console.error("Reg Listener:", err));
+                    
                     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'history'), (s) => {
                         history = s.docs.map(d => ({id: d.id, ...d.data()}));
                         renderHallOfFame();
-                    });
+                    }, (err) => console.error("Hist Listener:", err));
                 }
             });
 
             setInterval(() => {
                 updateUI();
-                renderDashboard(); // Re-render to update current cycle view
             }, 1000);
             updateUI();
         }
