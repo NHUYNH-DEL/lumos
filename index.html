@@ -3,258 +3,446 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lumos Race Management</title>
+    <title>Lumos Race - Chị Đẹp Tài Năng</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #05060b; color: #e2e8f0; }
-        .glass-card { background: rgba(15, 17, 26, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.03); }
-        .nav-active { background: #4f46e5; color: white; box-shadow: 0 10px 20px -5px rgba(79, 70, 229, 0.5); }
-        .empty-slot { border: 2px dashed #1e293b; color: #475569; }
-        .custom-input { background: #0f111a; border: 2px solid #1e293b; transition: all 0.2s; }
-        .custom-input:focus { border-color: #4f46e5; outline: none; }
-        .is-postponed { border-left: 4px solid #f59e0b; background: rgba(245, 158, 11, 0.05) !important; }
+        body { font-family: 'Inter', sans-serif; background-color: #020408; color: #cbd5e1; }
+        .glass-card { background: rgba(15, 17, 26, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        .btn-primary { background: #4f46e5; transition: all 0.3s; }
+        .btn-primary:hover { background: #4338ca; transform: translateY(-2px); }
+        .nav-btn { transition: all 0.2s; }
+        .active-timer { color: #818cf8; text-shadow: 0 0 15px rgba(129, 140, 248, 0.5); }
+        .danger-timer { color: #fb7185; text-shadow: 0 0 15px rgba(251, 113, 133, 0.5); }
     </style>
 </head>
-<body class="pb-24">
+<body class="pb-20">
 
-    <!-- Header -->
-    <header class="p-6 max-w-6xl mx-auto flex justify-between items-center">
-        <div>
-            <h1 class="text-2xl font-black italic tracking-tighter text-white uppercase">Lumos <span class="text-indigo-500">Race</span></h1>
-            <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em]">Hệ thống quản lý chuyên sâu</p>
+    <!-- Header Thông báo -->
+    <div id="status-bar" class="py-1.5 px-6 text-center text-[10px] font-black uppercase tracking-[0.25em] text-white/90 bg-slate-800 transition-colors">
+        HỆ THỐNG ĐANG KHỞI TẠO...
+    </div>
+
+    <!-- Navigation -->
+    <header class="bg-slate-900/90 border-b border-white/5 py-4 px-6 sticky top-0 z-50 backdrop-blur-xl">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-8">
+                <h1 class="text-2xl font-black italic text-white uppercase tracking-tighter cursor-pointer" onclick="showTab('dashboard')">
+                    LUMOS <span class="text-indigo-500">RACE</span>
+                </h1>
+                <nav class="flex items-center gap-1 bg-black/40 p-1 rounded-2xl border border-white/5">
+                    <button onclick="showTab('dashboard')" class="nav-btn px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-tighter transition-all bg-indigo-600 text-white" id="btn-dashboard">Bảng Đua</button>
+                    <button onclick="showTab('halloffame')" class="nav-btn px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-tighter transition-all text-slate-500 hover:text-white" id="btn-halloffame">Bảng Vàng</button>
+                </nav>
+            </div>
+            
+            <div class="flex items-center gap-4 bg-black/60 px-5 py-2 rounded-2xl border border-white/10">
+                <div class="flex flex-col items-end pr-4 border-r border-white/10">
+                    <span id="stage-status" class="text-[9px] font-black text-indigo-400 uppercase tracking-widest">TRẠNG THÁI</span>
+                    <span id="stage-info" class="text-[11px] font-black text-white italic">ĐANG TẢI...</span>
+                </div>
+                <div class="text-center min-w-[140px]">
+                    <div id="countdown-label" class="text-[8px] font-bold text-slate-500 uppercase mb-0.5 tracking-tighter">THỜI GIAN CÒN LẠI</div>
+                    <div id="countdown-timer" class="text-xl font-black italic leading-none font-mono active-timer">00:00:00</div>
+                </div>
+            </div>
         </div>
     </header>
 
-    <!-- Navigation -->
-    <nav class="max-w-6xl mx-auto px-4 mb-8 sticky top-4 z-50">
-        <div class="flex p-1.5 bg-[#0f111a] rounded-2xl border border-white/5 gap-1 shadow-2xl">
-            <button onclick="switchSheet('active')" id="nav-active" class="nav-active flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">🏆 Đua Top</button>
-            <button onclick="switchSheet('queue')" id="nav-queue" class="flex-1 py-3 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">⏳ Hàng Chờ</button>
-            <button onclick="switchSheet('register')" id="nav-register" class="flex-1 py-3 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">✍️ Ghi Danh</button>
-        </div>
-    </nav>
-
-    <!-- Main Content -->
-    <main class="max-w-6xl mx-auto px-4">
+    <main class="max-w-7xl mx-auto px-6 mt-10 space-y-12">
         
-        <!-- SHEET 1: ĐUA TOP -->
-        <div id="sheet-active" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
-
-        <!-- SHEET 2: HÀNG CHỜ -->
-        <div id="sheet-queue" class="hidden space-y-10"></div>
-
-        <!-- SHEET 3: GHI DANH -->
-        <div id="sheet-register" class="hidden max-w-lg mx-auto">
-            <div class="glass-card p-8 rounded-[32px] border border-white/5 shadow-2xl">
-                <h2 class="text-xl font-black text-white uppercase italic text-center mb-8">Đăng ký tham gia</h2>
-                <form id="reg-form" class="space-y-5">
-                    <div>
-                        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-2 block">Tên nhân vật</label>
-                        <input type="text" id="reg-name" required placeholder="" class="custom-input w-full p-4 rounded-xl text-white font-black uppercase tracking-tight">
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-2 block">Bảng đua</label>
-                            <select id="reg-type" class="custom-input w-full p-4 rounded-xl text-white font-black bg-[#0f111a]">
-                                <option>Thân Mật</option>
-                                <option>Hẹn Hò</option>
-                                <option>Khí</option>
-                                <option>Tư Chất</option>
-                                <option>Bạc/Dược</option>
-                            </select>
+        <!-- Tab: Dashboard -->
+        <div id="tab-dashboard" class="tab-content space-y-12">
+            <section class="glass-card p-8 rounded-[40px] relative overflow-hidden">
+                <div class="flex flex-col md:flex-row items-center justify-between gap-6 mb-10">
+                    <div class="flex items-center gap-5">
+                        <div class="w-14 h-14 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
                         </div>
                         <div>
-                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-2 block">Mục tiêu</label>
-                            <select id="reg-top" class="custom-input w-full p-4 rounded-xl text-white font-black bg-[#0f111a]">
-                                <option>Top 1</option>
-                                <option>Top 2</option>
-                                <option>Top 3</option>
-                            </select>
+                            <h2 id="active-stage-title" class="text-2xl font-black text-white uppercase italic tracking-tighter">NỘI DUNG CHẶNG</h2>
+                            <p class="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">Cập nhật thời gian thực</p>
                         </div>
                     </div>
-                    <button type="submit" class="w-full py-5 bg-indigo-600 rounded-xl text-white font-black uppercase tracking-widest hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-500/20">Xác nhận</button>
-                </form>
+                    <button onclick="showTab('add')" class="btn-primary text-white font-black px-8 py-3 rounded-xl text-xs uppercase shadow-lg">Ghi Danh Đua Mới</button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="grid-current-stage">
+                    <div class="col-span-full py-20 text-center text-slate-600 font-black italic uppercase tracking-widest animate-pulse">Đang kết nối hệ thống dữ liệu...</div>
+                </div>
+            </section>
+
+            <!-- Hàng chờ -->
+            <section class="space-y-6">
+                <div class="flex items-center justify-between px-4">
+                    <h2 class="text-xl font-black text-white uppercase italic flex items-center gap-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-500"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        DANH SÁCH ĐĂNG KÝ
+                    </h2>
+                </div>
+                <div class="glass-card rounded-[30px] overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-white/[0.02] border-b border-white/5">
+                                    <th class="p-6 text-[10px] font-black text-slate-500 uppercase">STT</th>
+                                    <th class="p-6 text-[10px] font-black text-slate-500 uppercase">Chị Đẹp</th>
+                                    <th class="p-6 text-[10px] font-black text-slate-500 uppercase text-center">Nội Dung</th>
+                                    <th class="p-6 text-[10px] font-black text-slate-500 uppercase text-center">Top Đua</th>
+                                    <th class="p-6 text-[10px] font-black text-slate-500 uppercase">Chặng Dự Kiến</th>
+                                    <th class="p-6 text-[10px] font-black text-slate-500 uppercase text-right">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="waiting-list-body" class="divide-y divide-white/5">
+                                <tr><td colspan="6" class="p-10 text-center text-slate-600 font-black italic uppercase">Đang tải...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Tab: Hall of Fame -->
+        <div id="tab-halloffame" class="tab-content hidden">
+            <div class="text-center py-10">
+                <h2 class="text-5xl font-black text-white italic uppercase tracking-tighter">BẢNG VÀNG DANH VỌNG</h2>
+                <p class="text-amber-500 text-[10px] font-black uppercase tracking-[0.5em] mt-4">Vinh danh các chị đẹp đạt giải</p>
             </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mt-12" id="hall-of-fame-grid"></div>
+        </div>
+
+        <!-- Tab: Add Form -->
+        <div id="tab-add" class="tab-content hidden max-w-xl mx-auto glass-card p-12 rounded-[50px]">
+            <h2 class="text-3xl font-black text-white uppercase italic text-center mb-10 tracking-tighter">GHI DANH ĐUA</h2>
+            <form id="registration-form" class="space-y-6">
+                <div class="space-y-2">
+                    <label class="text-[10px] font-black text-slate-500 uppercase ml-2">Tên Chị Đẹp</label>
+                    <input type="text" id="form-name" class="w-full bg-black/40 border border-white/10 p-5 rounded-2xl text-white font-bold uppercase outline-none focus:border-indigo-500" placeholder="NHẬP TÊN..." required>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-2">
+                        <label class="text-[10px] font-black text-slate-500 uppercase ml-2">Nội Dung</label>
+                        <select id="form-subType" class="w-full bg-black/40 border border-white/10 p-5 rounded-2xl text-white font-bold outline-none focus:border-indigo-500 uppercase">
+                            <option>Thế Lực</option><option>Tư Chất</option><option>Cầu Nguyện</option>
+                            <option>Thân Mật</option><option>Hẹn Hò</option><option>Khí</option>
+                            <option>Bạc</option><option>Dược</option><option>Mèo</option>
+                            <option>Cây</option><option>Luận Chiến</option><option>Hoa</option>
+                        </select>
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-[10px] font-black text-slate-500 uppercase ml-2">Mục Tiêu</label>
+                        <select id="form-top" class="w-full bg-black/40 border border-white/10 p-5 rounded-2xl text-white font-bold outline-none focus:border-indigo-500 uppercase">
+                            <option>Top 1</option><option>Top 2</option><option>Top 3</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="w-full py-5 btn-primary text-white font-black uppercase rounded-2xl shadow-xl mt-4">Xác nhận ghi danh</button>
+                <button type="button" onclick="showTab('dashboard')" class="w-full py-2 text-slate-500 font-bold uppercase text-[10px] hover:text-white transition-colors text-center block">Hủy bỏ</button>
+            </form>
         </div>
     </main>
 
-    <!-- Toast UI -->
-    <div id="toast" class="fixed bottom-8 left-1/2 -translate-x-1/2 px-6 py-3 bg-white text-black text-[10px] font-black uppercase tracking-widest rounded-full shadow-2xl opacity-0 transition-all z-[100] pointer-events-none"></div>
+    <div id="toast" class="fixed bottom-8 right-8 z-[100] bg-indigo-900 border border-indigo-400 p-5 rounded-2xl shadow-2xl hidden transform transition-all translate-x-full">
+        <p id="toast-msg" class="text-sm font-bold text-white italic"></p>
+    </div>
 
-    <script>
-        const TYPES = ["Thân Mật", "Hẹn Hò", "Khí", "Tư Chất", "Bạc/Dược"];
-        let players = JSON.parse(localStorage.getItem('lumos_pro_data')) || [];
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, addDoc, onSnapshot, query, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        function switchSheet(sheet) {
-            document.querySelectorAll('main > div').forEach(d => d.classList.add('hidden'));
-            document.getElementById(`sheet-${sheet}`).classList.remove('hidden');
-            document.querySelectorAll('nav button').forEach(btn => {
-                btn.classList.remove('nav-active', 'text-white');
-                btn.classList.add('text-slate-500');
-            });
-            document.getElementById(`nav-${sheet}`).classList.add('nav-active', 'text-white');
-            if (sheet === 'active') renderActive();
-            if (sheet === 'queue') renderQueue();
+        // Config Firebase
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'lumos-race-v11-custom';
+
+        // Lịch đua: Chặng 4 ngày, Chặng 2 (Ngày 5-8 của chu kỳ)
+        const CYCLE_START_DATE = new Date(2026, 2, 19, 0, 0, 0); 
+        const CYCLE_DAYS = 20;
+        const STAGES = [
+            { id: 1, name: "Thế Lực + Tư Chất + Cầu Nguyện", duration: 4, startDay: 1, items: ["Thế Lực", "Tư Chất", "Cầu Nguyện"] },
+            { id: 2, name: "Thân Mật + Hẹn Hò + Khí", duration: 4, startDay: 5, items: ["Thân Mật", "Hẹn Hò", "Khí"] },
+            { id: 3, name: "Tư Chất + Bạc + Dược", duration: 4, startDay: 9, items: ["Tư Chất", "Bạc", "Dược"] },
+            { id: 4, name: "Thế Lực + Mèo + Cây", duration: 4, startDay: 13, items: ["Thế Lực", "Mèo", "Cây"] },
+            { id: 5, name: "Luận Chiến + Thân Mật + Hoa + Khí", duration: 4, startDay: 17, items: ["Luận Chiến", "Thân Mật", "Hoa", "Khí"] },
+        ];
+
+        let players = [];
+        let history = [];
+
+        // Logic thời gian tùy biến theo yêu cầu
+        function getDetailedTimeInfo() {
+            const now = new Date();
+            const diffTime = now - CYCLE_START_DATE;
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            const cycleOffset = Math.floor(diffDays / CYCLE_DAYS);
+            const dayInCycle = (diffDays % CYCLE_DAYS) + 1;
+            
+            const stage = STAGES.find(s => dayInCycle >= s.startDay && dayInCycle < s.startDay + s.duration) || STAGES[0];
+            const dayOfStage = ((dayInCycle - stage.startDay) % stage.duration) + 1;
+
+            // Xác định thời điểm Deadline (22h của mốc thời gian)
+            // Bảng 1&2 (Bạc/Dược): Hết ngày thứ 3 của chặng (2 ngày 22h kể từ lúc bắt đầu)
+            // Bảng 3 (Tư Chất): Hết ngày thứ 4 của chặng (22h kể từ lúc bảng 1&2 xong)
+            
+            let deadline = new Date(CYCLE_START_DATE);
+            deadline.setDate(CYCLE_START_DATE.getDate() + (cycleOffset * CYCLE_DAYS) + (stage.startDay - 1));
+
+            let statusLabel = "";
+            let infoLabel = "";
+
+            if (dayOfStage <= 3) {
+                // Đang trong thời gian Bạc/Dược (hoặc ngày đầu chặng)
+                // Deadline là 22h ngày thứ 3 của chặng
+                deadline.setDate(deadline.getDate() + 2); 
+                deadline.setHours(22, 0, 0, 0);
+                statusLabel = "BẢNG ĐẦU (3-4 BẢNG)";
+                infoLabel = `CHẶNG ${stage.id} • ${stage.items[1]} & ${stage.items[2]}`;
+            } else {
+                // Đang trong ngày cuối của chặng (Bảng Tư Chất)
+                deadline.setDate(deadline.getDate() + 3);
+                deadline.setHours(22, 0, 0, 0);
+                statusLabel = "BẢNG CUỐI";
+                infoLabel = `CHẶNG ${stage.id} • ${stage.items[0]}`;
+            }
+
+            // Nếu đã qua 22h, kiểm tra xem có phải đang nghỉ không
+            if (now > deadline) {
+                // Thời gian nghỉ sau khi kết thúc bảng
+                statusLabel = "NGHỈ NGƠI";
+                infoLabel = "KẾT THÚC BẢNG ĐUA";
+            }
+
+            return { stage, dayOfStage, now, deadline, statusLabel, infoLabel, cycleOffset };
         }
 
-        function renderActive() {
-            const container = document.getElementById('sheet-active');
-            container.innerHTML = "";
-            TYPES.forEach(type => {
-                let html = `
-                    <div class="glass-card p-5 rounded-[28px] border border-white/5 space-y-4">
-                        <div class="flex justify-between items-center border-b border-white/5 pb-3">
-                            <span class="text-xs font-black text-indigo-400 uppercase tracking-widest">${type}</span>
-                        </div>
-                        <div class="space-y-2">`;
+        function updateUI() {
+            const { stage, now, deadline, statusLabel, infoLabel } = getDetailedTimeInfo();
+            
+            const statusEl = document.getElementById('stage-status');
+            const infoEl = document.getElementById('stage-info');
+            const timerEl = document.getElementById('countdown-timer');
+            const titleEl = document.getElementById('active-stage-title');
+            const statusBar = document.getElementById('status-bar');
 
-                [1, 2, 3].forEach(rank => {
-                    const topStr = `Top ${rank}`;
-                    const p = players.find(x => x.type === type && x.top === topStr && x.status === 'active');
-                    if (p) {
-                        html += `
-                            <div class="p-4 bg-white/5 rounded-2xl flex justify-between items-center group">
-                                <div>
-                                    <div class="text-[9px] font-black text-indigo-400 uppercase mb-0.5">HẠNG ${rank}</div>
-                                    <div class="text-sm font-black text-white uppercase italic">${p.name}</div>
-                                </div>
-                                <button onclick="finish(${p.id})" class="p-2.5 bg-emerald-500/10 text-emerald-500 rounded-xl hover:bg-emerald-500 hover:text-white transition-all">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>
-                                </button>
-                            </div>`;
-                    } else {
-                        html += `
-                            <div class="p-4 empty-slot rounded-2xl flex justify-between items-center">
-                                <div>
-                                    <div class="text-[9px] font-black text-slate-700 uppercase mb-0.5">HẠNG ${rank}</div>
-                                    <div class="text-sm font-black text-slate-800 uppercase italic">CÒN TRỐNG</div>
-                                </div>
-                                <button onclick="quickReg('${type}', ${rank})" class="text-[9px] font-black bg-slate-900 text-slate-400 px-3 py-2 rounded-lg hover:bg-indigo-600 hover:text-white transition-all uppercase">Đăng ký</button>
-                            </div>`;
-                    }
-                });
-                container.innerHTML += html + `</div></div>`;
-            });
-        }
+            if (statusEl) statusEl.innerText = statusLabel;
+            if (infoEl) infoEl.innerText = infoLabel;
+            if (titleEl) titleEl.innerText = stage.name;
 
-        function renderQueue() {
-            const container = document.getElementById('sheet-queue');
-            container.innerHTML = "";
-            TYPES.forEach(type => {
-                // Sắp xếp hàng chờ: Người không nhường lên trước, người nhường xuống sau
-                const qList = players.filter(p => p.type === type && p.status === 'waiting')
-                    .sort((a, b) => {
-                        if (a.isPostponed !== b.isPostponed) return a.isPostponed ? 1 : -1;
-                        return a.timestamp - b.timestamp;
-                    });
-
-                if (qList.length > 0) {
-                    let html = `
-                        <div class="space-y-4">
-                            <div class="flex items-center gap-4"><h3 class="text-xs font-black uppercase text-indigo-400 min-w-fit">${type}</h3><div class="h-px w-full bg-white/5"></div></div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">`;
-
-                    qList.forEach((p, idx) => {
-                        const date = new Date();
-                        date.setDate(date.getDate() + (idx + 1) * 17);
-                        const dateStr = date.toLocaleDateString('vi-VN');
-
-                        html += `
-                            <div class="glass-card p-4 rounded-2xl flex justify-between items-center group ${p.isPostponed ? 'is-postponed opacity-60' : ''}">
-                                <div class="flex items-center gap-4">
-                                    <div class="text-xs font-black ${p.isPostponed ? 'text-amber-500' : 'text-slate-600'}">${idx + 1}</div>
-                                    <div>
-                                        <div class="text-sm font-black text-white uppercase flex items-center gap-2">
-                                            ${p.name}
-                                            ${p.isPostponed ? '<span class="text-[8px] px-1.5 py-0.5 bg-amber-500/20 text-amber-500 rounded">ĐANG NHƯỜNG</span>' : ''}
-                                        </div>
-                                        <div class="text-[9px] font-bold text-slate-500 uppercase mt-1">${p.top} • Dự kiến: ${dateStr}</div>
-                                    </div>
-                                </div>
-                                <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    ${p.isPostponed 
-                                        ? `<button onclick="togglePostpone(${p.id}, false)" title="Hủy nhường" class="p-2 bg-amber-500/20 text-amber-500 rounded-lg hover:bg-amber-500 hover:text-white transition-all"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>`
-                                        : `<button onclick="togglePostpone(${p.id}, true)" title="Nhường lượt" class="p-2 bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500 hover:text-white transition-all"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="m7 13 5 5 5-5M7 6l5 5 5-5"/></svg></button>`
-                                    }
-                                    <button onclick="moveToActive(${p.id})" title="Lên bảng chính" class="p-2 bg-indigo-500/10 text-indigo-500 rounded-lg hover:bg-indigo-500 hover:text-white transition-all"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
-                                    <button onclick="remove(${p.id})" class="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
-                                </div>
-                            </div>`;
-                    });
-                    container.innerHTML += html + `</div></div>`;
+            let diff = deadline - now;
+            
+            if (diff <= 0) {
+                if (timerEl) {
+                    timerEl.innerText = "00:00:00:00";
+                    timerEl.className = "text-xl font-black italic leading-none font-mono text-slate-600";
                 }
-            });
-            if (!container.innerHTML) container.innerHTML = `<div class="py-20 text-center text-slate-700 text-[10px] font-black uppercase tracking-widest">Hàng chờ hiện đang trống</div>`;
-        }
+                if (statusBar) {
+                    statusBar.innerText = "THỜI GIAN ĐUA ĐÃ KẾT THÚC - CHỜ BẢNG TIẾP THEO";
+                    statusBar.className = "py-1.5 px-6 text-center text-[10px] font-black uppercase tracking-[0.25em] text-white/90 bg-slate-800";
+                }
+            } else {
+                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const secs = Math.floor((diff % (1000 * 60)) / 1000);
 
-        function quickReg(type, rank) {
-            document.getElementById('reg-type').value = type;
-            document.getElementById('reg-top').value = `Top ${rank}`;
-            switchSheet('register');
-        }
-
-        document.getElementById('reg-form').onsubmit = (e) => {
-            e.preventDefault();
-            const name = document.getElementById('reg-name').value.toUpperCase();
-            const type = document.getElementById('reg-type').value;
-            const top = document.getElementById('reg-top').value;
-            const isBusy = players.find(x => x.type === type && x.top === top && x.status === 'active');
-            players.push({ id: Date.now(), name, type, top, status: isBusy ? 'waiting' : 'active', isPostponed: false, timestamp: Date.now() });
-            save("Đã đăng ký!");
-            document.getElementById('reg-form').reset();
-            switchSheet(isBusy ? 'queue' : 'active');
-        };
-
-        function togglePostpone(id, state) {
-            const p = players.find(x => x.id === id);
-            if (p) {
-                p.isPostponed = state;
-                save(state ? "Đã nhường lượt cho người khác" : "Đã hủy nhường lượt");
+                if (timerEl) {
+                    timerEl.innerText = `${days.toString().padStart(2, '0')}:${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                    timerEl.className = diff < (12 * 60 * 60 * 1000) ? "text-xl font-black italic leading-none font-mono danger-timer" : "text-xl font-black italic leading-none font-mono active-timer";
+                }
+                if (statusBar) {
+                    statusBar.innerText = `LUMOS RACE • ${infoLabel} • ĐANG DIỄN RA`;
+                    statusBar.className = "py-1.5 px-6 text-center text-[10px] font-black uppercase tracking-[0.25em] text-white/90 bg-indigo-600";
+                }
             }
         }
 
-        function finish(id) {
-            const p = players.find(x => x.id === id);
-            const type = p.type;
-            const top = p.top;
-            players = players.filter(x => x.id !== id);
+        // --- Render logic ---
+        function renderDashboard() {
+            const { stage, cycleOffset } = getDetailedTimeInfo();
+            const grid = document.getElementById('grid-current-stage');
+            if (!grid) return;
+            grid.innerHTML = '';
+
+            stage.items.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'bg-black/40 rounded-[35px] p-6 border border-white/5';
+                card.innerHTML = `<div class="text-[10px] font-black text-indigo-400 italic uppercase mb-6">${item}</div>`;
+                
+                const list = document.createElement('div');
+                list.className = 'space-y-3';
+                ['Top 1', 'Top 2', 'Top 3'].forEach(top => {
+                    const p = players.find(x => x.stageId === stage.id && x.subType === item && x.top === top && x.cycleOffset === cycleOffset);
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = `p-4 rounded-2xl border flex flex-col gap-1 transition-all ${p ? 'bg-indigo-500/10 border-indigo-500/30' : 'bg-black/20 border-white/5 opacity-40'}`;
+                    itemDiv.innerHTML = `
+                        <div class="flex justify-between items-center">
+                            <span class="text-[8px] font-black text-indigo-400/60 uppercase">${top}</span>
+                            ${p ? `<button onclick="completePlayer('${p.id}')" class="text-emerald-400 hover:scale-110 transition-transform"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>` : ''}
+                        </div>
+                        <span class="text-sm font-black text-white uppercase truncate">${p ? p.name : 'ĐANG TRỐNG'}</span>
+                    `;
+                    list.appendChild(itemDiv);
+                });
+                card.appendChild(list);
+                grid.appendChild(card);
+            });
+
+            // Waiting List
+            const tbody = document.getElementById('waiting-list-body');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            const sortedPlayers = [...players].sort((a, b) => a.createdAt - b.createdAt);
             
-            // Tìm người kế tiếp trong hàng chờ (không nhường) cho vị trí này
-            const next = players.filter(x => x.type === type && x.top === top && x.status === 'waiting' && !x.isPostponed)
-                .sort((a,b) => a.timestamp - b.timestamp)[0];
-            
-            if (next) next.status = 'active';
-            save("Xác nhận hoàn thành bảng!");
+            if (sortedPlayers.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="p-10 text-center text-slate-600 font-black italic uppercase">Chưa có ai ghi danh đua</td></tr>';
+            } else {
+                sortedPlayers.forEach((p, i) => {
+                    const row = document.createElement('tr');
+                    row.className = "hover:bg-white/[0.01]";
+                    row.innerHTML = `
+                        <td class="p-6 text-[10px] font-black text-slate-600">#${i + 1}</td>
+                        <td class="p-6 text-sm font-black text-white uppercase italic">${p.name}</td>
+                        <td class="p-6 text-center"><span class="px-3 py-1 bg-indigo-500/10 text-indigo-400 rounded-lg text-[9px] font-black uppercase">${p.subType}</span></td>
+                        <td class="p-6 text-center text-[10px] font-black text-slate-400 uppercase">${p.top}</td>
+                        <td class="p-6 text-[10px] font-black text-slate-300">CHẶNG ${p.stageId} (CK ${p.cycleOffset + 1})</td>
+                        <td class="p-6 text-right">
+                            <button onclick="deletePlayer('${p.id}')" class="text-red-500 hover:text-red-400">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            }
         }
 
-        function moveToActive(id) {
-            const p = players.find(x => x.id === id);
-            const busy = players.find(x => x.type === p.type && x.top === p.top && x.status === 'active');
-            if (busy) return showToast("Vị trí này đang có người đua!");
-            p.status = 'active';
-            p.isPostponed = false;
-            save("Đã đưa lên bảng chính");
-            switchSheet('active');
+        function renderHallOfFame() {
+            const grid = document.getElementById('hall-of-fame-grid');
+            if (!grid) return;
+            grid.innerHTML = '';
+            history.sort((a, b) => b.timestamp - a.timestamp).forEach(h => {
+                const date = new Date(h.completedAt);
+                const card = document.createElement('div');
+                card.className = 'glass-card p-8 rounded-[40px] border-amber-500/20';
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-6">
+                        <div class="bg-amber-500 text-black px-3 py-1 rounded-full text-[8px] font-black uppercase">Champion</div>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-amber-500"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+                    </div>
+                    <h3 class="text-2xl font-black text-white uppercase italic tracking-tighter mb-2">${h.name}</h3>
+                    <p class="text-[10px] font-black uppercase text-slate-500 mb-6">${h.subType} - ${h.top}</p>
+                    <div class="text-[9px] text-slate-600 font-bold uppercase border-t border-white/5 pt-4">${date.toLocaleDateString('vi-VN')}</div>
+                `;
+                grid.appendChild(card);
+            });
         }
 
-        function remove(id) { players = players.filter(p => p.id !== id); save("Đã xóa khỏi danh sách"); }
-
-        function save(msg) {
-            localStorage.setItem('lumos_pro_data', JSON.stringify(players));
-            renderActive();
-            renderQueue();
-            showToast(msg);
-        }
+        // --- Database Actions ---
+        window.showTab = (tabId) => {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('bg-indigo-600', 'text-white'));
+            const btn = document.getElementById(`btn-${tabId}`);
+            if(btn) btn.classList.add('bg-indigo-600', 'text-white');
+        };
 
         function showToast(msg) {
-            const t = document.getElementById('toast');
-            t.innerText = msg;
-            t.classList.replace('opacity-0', 'opacity-100');
-            setTimeout(() => t.classList.replace('opacity-100', 'opacity-0'), 2000);
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = msg;
+            toast.classList.remove('hidden', 'translate-x-full');
+            setTimeout(() => toast.classList.add('translate-x-full'), 3000);
         }
 
-        window.onload = renderActive;
+        window.deletePlayer = async (id) => {
+            if(!auth.currentUser) return;
+            if(confirm('Bạn muốn xóa đăng ký này?')) {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', id));
+                showToast('Đã xóa dữ liệu.');
+            }
+        };
+
+        window.completePlayer = async (id) => {
+            if(!auth.currentUser) return;
+            const p = players.find(x => x.id === id);
+            if(!p) return;
+            const batch = writeBatch(db);
+            const histRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'history'));
+            batch.set(histRef, { ...p, completedAt: new Date().toISOString(), timestamp: Date.now() });
+            batch.delete(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', id));
+            await batch.commit();
+            showToast(`Vinh danh ${p.name}!`);
+        };
+
+        document.getElementById('registration-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('form-name').value.toUpperCase();
+            const subType = document.getElementById('form-subType').value;
+            const top = document.getElementById('form-top').value;
+
+            const validStages = STAGES.filter(s => s.items.includes(subType));
+            const now = new Date();
+            let chosen = null;
+
+            for (let offset = 0; offset < 5; offset++) {
+                for (let stage of validStages) {
+                    const stageEnd = new Date(CYCLE_START_DATE);
+                    stageEnd.setDate(CYCLE_START_DATE.getDate() + (offset * CYCLE_DAYS) + (stage.startDay + stage.duration - 1));
+                    stageEnd.setHours(22, 0, 0, 0);
+
+                    if (stageEnd > now) {
+                        const occupied = players.some(p => p.stageId === stage.id && p.subType === subType && p.top === top && p.cycleOffset === offset);
+                        if (!occupied) { chosen = { stageId: stage.id, cycleOffset: offset }; break; }
+                    }
+                }
+                if (chosen) break;
+            }
+
+            if (chosen) {
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'registrations'), {
+                    name, subType, top, ...chosen, createdAt: Date.now()
+                });
+                document.getElementById('form-name').value = '';
+                showTab('dashboard');
+                showToast('Đăng ký thành công!');
+            } else {
+                alert('Lịch đua đã đầy, vui lòng chọn nội dung khác!');
+            }
+        };
+
+        // --- Init ---
+        async function init() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (e) { console.error(e); }
+
+            onAuthStateChanged(auth, (user) => {
+                if(user) {
+                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registrations'), (s) => {
+                        players = s.docs.map(d => ({id: d.id, ...d.data()}));
+                        renderDashboard();
+                    });
+                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'history'), (s) => {
+                        history = s.docs.map(d => ({id: d.id, ...d.data()}));
+                        renderHallOfFame();
+                    });
+                }
+            });
+
+            setInterval(() => {
+                updateUI();
+                renderDashboard(); // Re-render to update current cycle view
+            }, 1000);
+            updateUI();
+        }
+
+        window.addEventListener('load', init);
     </script>
 </body>
 </html>
