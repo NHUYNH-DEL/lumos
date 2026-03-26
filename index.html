@@ -16,13 +16,17 @@
         .danger-timer { color: #fb7185; text-shadow: 0 0 15px rgba(251, 113, 133, 0.5); }
         .loading-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+        /* Tối ưu thanh cuộn */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
     </style>
 </head>
 <body class="pb-20">
 
     <!-- Header Thông báo -->
     <div id="status-bar" class="py-1.5 px-6 text-center text-[10px] font-black uppercase tracking-[0.25em] text-white/90 bg-slate-800 transition-colors">
-        HỆ THỐNG ĐANG KHỞI TẠO...
+        ĐANG KHỞI TẠO HỆ THỐNG...
     </div>
 
     <!-- Navigation -->
@@ -41,7 +45,7 @@
             <div class="flex items-center gap-4 bg-black/60 px-5 py-2 rounded-2xl border border-white/10">
                 <div class="flex flex-col items-end pr-4 border-r border-white/10">
                     <span id="stage-status" class="text-[9px] font-black text-indigo-400 uppercase tracking-widest">TRẠNG THÁI</span>
-                    <span id="stage-info" class="text-[11px] font-black text-white italic">ĐANG KẾT NỐI...</span>
+                    <span id="stage-info" class="text-[11px] font-black text-white italic">ĐANG TẢI...</span>
                 </div>
                 <div class="text-center min-w-[140px]">
                     <div id="countdown-label" class="text-[8px] font-bold text-slate-500 uppercase mb-0.5 tracking-tighter">THỜI GIAN CÒN LẠI</div>
@@ -76,7 +80,7 @@
                 </div>
             </section>
 
-            <!-- Hàng chờ -->
+            <!-- Danh sách đăng ký -->
             <section class="space-y-6">
                 <div class="flex items-center justify-between px-4">
                     <h2 class="text-xl font-black text-white uppercase italic flex items-center gap-3">
@@ -98,7 +102,7 @@
                                 </tr>
                             </thead>
                             <tbody id="waiting-list-body" class="divide-y divide-white/5">
-                                <tr><td colspan="6" class="p-10 text-center text-slate-600 font-black italic uppercase">Đang đợi máy chủ...</td></tr>
+                                <tr><td colspan="6" class="p-10 text-center text-slate-600 font-black italic uppercase">Đang kết nối Cloud...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -140,7 +144,7 @@
                         </select>
                     </div>
                 </div>
-                <button type="submit" class="w-full py-5 btn-primary text-white font-black uppercase rounded-2xl shadow-xl mt-4">Xác nhận ghi danh</button>
+                <button type="submit" id="submit-btn" class="w-full py-5 btn-primary text-white font-black uppercase rounded-2xl shadow-xl mt-4">Xác nhận ghi danh</button>
                 <button type="button" onclick="showTab('dashboard')" class="w-full py-2 text-slate-500 font-bold uppercase text-[10px] hover:text-white transition-colors text-center block">Hủy bỏ</button>
             </form>
         </div>
@@ -155,13 +159,14 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, addDoc, onSnapshot, query, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Cấu hình fallback nếu môi trường thiếu config
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        // Khởi tạo Firebase Config
+        const firebaseConfig = JSON.parse(__firebase_config);
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'lumos-race-prod';
 
+        // Cấu hình Thời Gian
         const CYCLE_START_DATE = new Date(2026, 2, 19, 0, 0, 0); 
         const CYCLE_DAYS = 20;
         const STAGES = [
@@ -192,21 +197,16 @@
             let statusLabel = "";
             let infoLabel = "";
 
-            if (dayOfStage <= 3) {
+            if (dayOfStage <= 2) { // 2 ngày đầu
                 deadline.setDate(deadline.getDate() + 2); 
                 deadline.setHours(22, 0, 0, 0);
-                statusLabel = "BẢNG ĐẦU (3-4 BẢNG)";
+                statusLabel = "BẢNG ĐẦU";
                 infoLabel = `CHẶNG ${stage.id} • ${stage.items[1]} & ${stage.items[2]}`;
-            } else {
-                deadline.setDate(deadline.getDate() + 3);
+            } else { // 2 ngày sau
+                deadline.setDate(deadline.getDate() + 4);
                 deadline.setHours(22, 0, 0, 0);
                 statusLabel = "BẢNG CUỐI";
                 infoLabel = `CHẶNG ${stage.id} • ${stage.items[0]}`;
-            }
-
-            if (now > deadline) {
-                statusLabel = "NGHỈ NGƠI";
-                infoLabel = "KẾT THÚC BẢNG ĐUA";
             }
 
             return { stage, dayOfStage, now, deadline, statusLabel, infoLabel, cycleOffset };
@@ -226,8 +226,8 @@
             if (diff <= 0) {
                 timerEl.innerText = "00:00:00:00";
                 timerEl.className = "text-xl font-black italic leading-none font-mono text-slate-600";
-                statusBar.innerText = "KẾT THÚC PHIÊN ĐUA - ĐANG ĐỢI CẬP NHẬT CHẶNG MỚI";
-                statusBar.classList.replace('bg-indigo-600', 'bg-slate-800');
+                statusBar.innerText = "HẾT THỜI GIAN - CHỜ CHẶNG MỚI";
+                statusBar.style.backgroundColor = '#1e293b';
             } else {
                 const days = Math.floor(diff / (1000 * 60 * 60 * 24));
                 const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
@@ -235,10 +235,10 @@
                 const secs = Math.floor((diff % (1000 * 60)) / 1000);
 
                 timerEl.innerText = `${days.toString().padStart(2, '0')}:${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-                timerEl.className = diff < (12 * 60 * 60 * 1000) ? "text-xl font-black italic leading-none font-mono danger-timer" : "text-xl font-black italic leading-none font-mono active-timer";
+                timerEl.className = diff < (6 * 60 * 60 * 1000) ? "text-xl font-black italic leading-none font-mono danger-timer" : "text-xl font-black italic leading-none font-mono active-timer";
                 
                 statusBar.innerText = isConnected ? `LUMOS RACE • ${infoLabel} • ĐANG DIỄN RA` : "ĐANG ĐỒNG BỘ MÁY CHỦ CLOUD...";
-                if(isConnected) statusBar.classList.replace('bg-slate-800', 'bg-indigo-600');
+                if(isConnected) statusBar.style.backgroundColor = '#4f46e5';
             }
         }
 
@@ -262,7 +262,7 @@
                     itemDiv.innerHTML = `
                         <div class="flex justify-between items-center">
                             <span class="text-[8px] font-black text-indigo-400/60 uppercase">${top}</span>
-                            ${p ? `<button onclick="completePlayer('${p.id}')" class="text-emerald-400 hover:scale-110 transition-transform"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>` : ''}
+                            ${p ? `<button data-id="${p.id}" class="complete-btn text-emerald-400 hover:scale-110 transition-transform"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>` : ''}
                         </div>
                         <span class="text-sm font-black text-white uppercase truncate">${p ? p.name : 'ĐANG TRỐNG'}</span>
                     `;
@@ -272,12 +272,17 @@
                 grid.appendChild(card);
             });
 
+            // Gán sự kiện cho nút hoàn thành
+            document.querySelectorAll('.complete-btn').forEach(btn => {
+                btn.onclick = () => completePlayer(btn.dataset.id);
+            });
+
             const tbody = document.getElementById('waiting-list-body');
             tbody.innerHTML = '';
-            const sortedPlayers = [...players].sort((a, b) => a.createdAt - b.createdAt);
+            const sortedPlayers = [...players].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
             
             if (sortedPlayers.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="p-10 text-center text-slate-600 font-black italic uppercase">Database đang trống. Hãy ghi danh đua mới!</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="p-10 text-center text-slate-600 font-black italic uppercase">Database đang trống.</td></tr>';
             } else {
                 sortedPlayers.forEach((p, i) => {
                     const row = document.createElement('tr');
@@ -289,21 +294,27 @@
                         <td class="p-6 text-center text-[10px] font-black text-slate-400 uppercase">${p.top}</td>
                         <td class="p-6 text-[10px] font-black text-slate-300">CHẶNG ${p.stageId} (CK ${p.cycleOffset + 1})</td>
                         <td class="p-6 text-right">
-                            <button onclick="deletePlayer('${p.id}')" class="text-red-500 hover:text-red-400">
+                            <button data-id="${p.id}" class="delete-btn text-red-500 hover:text-red-400">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                             </button>
                         </td>
                     `;
                     tbody.appendChild(row);
                 });
+                
+                document.querySelectorAll('.delete-btn').forEach(btn => {
+                    btn.onclick = () => deletePlayer(btn.dataset.id);
+                });
             }
         }
 
         function renderHallOfFame() {
             const grid = document.getElementById('hall-of-fame-grid');
+            if(!grid) return;
             grid.innerHTML = '';
             if(history.length === 0) {
-                grid.innerHTML = '<div class="col-span-full py-20 text-center text-slate-600 font-black italic uppercase">Chưa có ai được vinh danh</div>';
+                grid.innerHTML = '<div class="col-span-full py-20 text-center text-slate-600 font-black italic uppercase">Chưa có vinh danh nào</div>';
+                return;
             }
             history.sort((a, b) => b.timestamp - a.timestamp).forEach(h => {
                 const date = new Date(h.completedAt);
@@ -324,42 +335,61 @@
 
         window.showTab = (tabId) => {
             document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
-            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('bg-indigo-600', 'text-white'));
+            const target = document.getElementById(`tab-${tabId}`);
+            if (target) target.classList.remove('hidden');
+            
+            document.querySelectorAll('.nav-btn').forEach(b => {
+                b.classList.remove('bg-indigo-600', 'text-white');
+                b.classList.add('text-slate-500');
+            });
             const btn = document.getElementById(`btn-${tabId}`);
-            if(btn) btn.classList.add('bg-indigo-600', 'text-white');
+            if(btn) {
+                btn.classList.add('bg-indigo-600', 'text-white');
+                btn.classList.remove('text-slate-500');
+            }
         };
 
         function showToast(msg) {
             const toast = document.getElementById('toast');
-            document.getElementById('toast-msg').innerText = msg;
+            const toastMsg = document.getElementById('toast-msg');
+            toastMsg.innerText = msg;
             toast.classList.remove('hidden', 'translate-x-full');
             setTimeout(() => toast.classList.add('translate-x-full'), 3000);
         }
 
-        window.deletePlayer = async (id) => {
+        async function deletePlayer(id) {
             if(!auth.currentUser) return;
-            if(confirm('Bạn muốn xóa đăng ký này?')) {
-                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', id));
-                showToast('Đã xóa dữ liệu.');
+            if(confirm('Xóa đăng ký này?')) {
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', id));
+                    showToast('Đã xóa dữ liệu.');
+                } catch (e) { console.error(e); }
             }
-        };
+        }
 
-        window.completePlayer = async (id) => {
+        async function completePlayer(id) {
             if(!auth.currentUser) return;
             const p = players.find(x => x.id === id);
             if(!p) return;
-            const batch = writeBatch(db);
-            const histRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'history'));
-            batch.set(histRef, { ...p, completedAt: new Date().toISOString(), timestamp: Date.now() });
-            batch.delete(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', id));
-            await batch.commit();
-            showToast(`Vinh danh ${p.name}!`);
-        };
+            try {
+                const batch = writeBatch(db);
+                const histRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'history'));
+                batch.set(histRef, { ...p, completedAt: new Date().toISOString(), timestamp: Date.now() });
+                batch.delete(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', id));
+                await batch.commit();
+                showToast(`Vinh danh ${p.name}!`);
+            } catch (e) { console.error(e); }
+        }
 
         document.getElementById('registration-form').onsubmit = async (e) => {
             e.preventDefault();
-            const name = document.getElementById('form-name').value.toUpperCase();
+            if(!isConnected) { showToast("Vui lòng đợi kết nối..."); return; }
+            
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true;
+            btn.innerText = "ĐANG XỬ LÝ...";
+
+            const name = document.getElementById('form-name').value.toUpperCase().trim();
             const subType = document.getElementById('form-subType').value;
             const top = document.getElementById('form-top').value;
 
@@ -382,48 +412,73 @@
             }
 
             if (chosen) {
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'registrations'), {
-                    name, subType, top, ...chosen, createdAt: Date.now()
-                });
-                document.getElementById('form-name').value = '';
-                showTab('dashboard');
-                showToast('Đăng ký thành công!');
+                try {
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'registrations'), {
+                        name, subType, top, ...chosen, createdAt: Date.now()
+                    });
+                    document.getElementById('form-name').value = '';
+                    showTab('dashboard');
+                    showToast('Ghi danh thành công!');
+                } catch (e) {
+                    console.error(e);
+                    showToast("Lỗi lưu dữ liệu!");
+                }
             } else {
-                alert('Lịch đua đã đầy, vui lòng chọn nội dung khác!');
+                alert('Lịch đua cho nội dung này đã đầy trong các chu kỳ tới!');
             }
+            btn.disabled = false;
+            btn.innerText = "XÁC NHẬN GHI DANH";
         };
 
-        async function init() {
+        // Hàm khởi tạo chính
+        async function startApp() {
             try {
+                // Bước 1: Auth
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
                     await signInAnonymously(auth);
                 }
-            } catch (e) { console.error("Auth Error:", e); }
 
-            onAuthStateChanged(auth, (user) => {
-                if(user) {
-                    isConnected = true;
-                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registrations'), (s) => {
-                        players = s.docs.map(d => ({id: d.id, ...d.data()}));
-                        renderDashboard();
-                    }, (err) => console.error("Reg Listener:", err));
-                    
-                    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'history'), (s) => {
-                        history = s.docs.map(d => ({id: d.id, ...d.data()}));
-                        renderHallOfFame();
-                    }, (err) => console.error("Hist Listener:", err));
-                }
-            });
+                // Bước 2: Theo dõi Auth & Dữ liệu
+                onAuthStateChanged(auth, (user) => {
+                    if(user) {
+                        isConnected = true;
+                        updateUI();
+                        
+                        // Listen Registrations
+                        onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registrations'), (s) => {
+                            players = s.docs.map(d => ({id: d.id, ...d.data()}));
+                            renderDashboard();
+                        }, (err) => {
+                            console.error("Reg Error:", err);
+                            isConnected = false;
+                        });
+                        
+                        // Listen History
+                        onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'history'), (s) => {
+                            history = s.docs.map(d => ({id: d.id, ...d.data()}));
+                            renderHallOfFame();
+                        }, (err) => console.error("Hist Error:", err));
+                    }
+                });
 
-            setInterval(() => {
-                updateUI();
-            }, 1000);
-            updateUI();
+                // Cập nhật Timer mỗi giây
+                setInterval(updateUI, 1000);
+
+            } catch (error) {
+                console.error("Khởi tạo thất bại:", error);
+                document.getElementById('status-bar').innerText = "LỖI KẾT NỐI MÁY CHỦ. VUI LÒNG TẢI LẠI TRANG.";
+                document.getElementById('status-bar').style.backgroundColor = '#ef4444';
+            }
         }
 
-        window.addEventListener('load', init);
+        // Đảm bảo DOM sẵn sàng
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', startApp);
+        } else {
+            startApp();
+        }
     </script>
 </body>
 </html>
